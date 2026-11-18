@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Mahamantra Jaap Counter</title>
+  <style>
+    :root {
+      --bg: #12100e;
+      --card: #1e1a16;
+      --accent: #f59e0b;
+      --accent-glow: rgba(245, 158, 11, 0.25);
+      --green: #10b981;
+      --red: #ef4444;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body {
+      margin: 0; padding: 16px; background: var(--bg); color: var(--text);
+      display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+    }
+    .container { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 14px; }
+    .mantra-box {
+      background: var(--card); border: 1px solid #2e2822; border-radius: 14px;
+      padding: 14px; text-align: center; line-height: 1.55; font-size: 1.05rem; color: #fde68a;
+    }
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .stat-card {
+      background: var(--card); border: 1px solid #2e2822; border-radius: 14px;
+      padding: 14px; text-align: center;
+    }
+    .stat-label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+    .stat-value { font-size: 2.5rem; font-weight: 700; color: var(--accent); margin-top: 4px; }
+    .meter-card {
+      background: var(--card); border: 1px solid #2e2822; border-radius: 14px; padding: 14px;
+    }
+    .status-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 0.88rem; }
+    .badge { padding: 3px 9px; border-radius: 99px; font-weight: 600; font-size: 0.78rem; background: #2e2822; color: var(--muted); }
+    .badge.listening { background: rgba(16, 185, 129, 0.2); color: var(--green); }
+    .badge.chanting { background: var(--accent-glow); color: var(--accent); }
+    .badge.rejected { background: rgba(239, 68, 68, 0.2); color: var(--red); }
+    .bar-bg { width: 100%; height: 14px; background: #090807; border-radius: 99px; overflow: hidden; position: relative; }
+    .bar-fill { height: 100%; width: 0%; background: var(--green); transition: width 0.06s linear; }
+    .threshold-marker { position: absolute; top: 0; bottom: 0; width: 3px; background: var(--accent); z-index: 2; }
+    .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    button {
+      border: none; border-radius: 12px; padding: 14px; font-size: 1rem; font-weight: 600;
+      cursor: pointer; transition: transform 0.08s ease, opacity 0.15s;
+    }
+    button:active { transform: scale(0.97); }
+    .btn-primary { background: var(--accent); color: #12100e; grid-column: span 2; font-size: 1.1rem; }
+    .btn-primary.active { background: var(--red); color: #fff; }
+    .btn-secondary { background: #2e2822; color: var(--text); }
+    .settings {
+      background: var(--card); border: 1px solid #2e2822; border-radius: 14px;
+      padding: 14px; display: flex; flex-direction: column; gap: 12px;
+    }
+    .slider-group { display: flex; flex-direction: column; gap: 4px; }
+    .slider-header { display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--muted); }
+    .slider-header span:last-child { color: var(--text); font-weight: 600; }
+    input[type="range"] { width: 100%; accent-color: var(--accent); }
+    .hint { font-size: 0.78rem; color: var(--muted); text-align: center; line-height: 1.4; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="mantra-box">
+      <strong>Hare Rama Hare Rama Rama Rama Hare Hare</strong><br />
+      <strong>Hare Krishna Hare Krishna Krishna Krishna Hare Hare</strong>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Current Mala (108)</div>
+        <div class="stat-value" id="beadCount">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Completed Malas</div>
+        <div class="stat-value" id="malaCount">0</div>
+      </div>
+    </div>
+
+    <div class="meter-card">
+      <div class="status-row">
+        <span id="timerText">Burst: 0.0s | Pause: 0.0s</span>
+        <span class="badge" id="statusBadge">Idle</span>
+      </div>
+      <div class="bar-bg">
+        <div class="threshold-marker" id="threshMarker" style="left: 25%;"></div>
+        <div class="bar-fill" id="volBar"></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn-primary" id="toggleBtn">Start Voice Counting</button>
+      <button class="btn-secondary" id="manualBtn">+1 Manual Tap</button>
+      <button class="btn-secondary" id="calibrateBtn">Calibrate Noise (2s)</button>
+    </div>
+
+    <div class="settings">
+      <div class="slider-group">
+        <div class="slider-header"><span>Voice Trigger Threshold</span><span id="threshVal">25</span></div>
+        <input type="range" id="threshSlider" min="5" max="85" value="25" />
+      </div>
+      <div class="slider-group">
+        <div class="slider-header"><span>Min Mantra Length (sec)</span><span id="minSecVal">3.8s</span></div>
+        <input type="range" id="minSecSlider" min="2.0" max="8.0" step="0.2" value="3.8" />
+      </div>
+      <div class="slider-group">
+        <div class="slider-header"><span>Max Anti-Faucet Cutoff (sec)</span><span id="maxSecVal">10.0s</span></div>
+        <input type="range" id="maxSecSlider" min="6.0" max="15.0" step="0.5" value="10.0" />
+      </div>
+      <div class="slider-group">
+        <div class="slider-header"><span>Breath Pause Between Rounds</span><span id="pauseSecVal">0.7s</span></div>
+        <input type="range" id="pauseSecSlider" min="0.3" max="2.0" step="0.1" value="0.7" />
+      </div>
+      <button class="btn-secondary" id="resetBtn" style="font-size: 0.85rem; padding: 10px;">Reset Today's Progress</button>
+    </div>
+
+    <div class="hint" id="todaySummary">Today's Total: 0 chants • Screen stays awake while active</div>
+  </div>
+
+  <script>
+    // --- Persistent Storage (Resets automatically on a new calendar day) ---
+    const todayKey = "jaap_" + new Date().toISOString().slice(0, 10);
+    let state = JSON.parse(localStorage.getItem(todayKey)) || { beads: 0, malas: 0 };
+
+    const beadEl = document.getElementById("beadCount");
+    const malaEl = document.getElementById("malaCount");
+    const summaryEl = document.getElementById("todaySummary");
+
+    function saveAndRender() {
+      localStorage.setItem(todayKey, JSON.stringify(state));
+      beadEl.textContent = state.beads;
+      malaEl.textContent = state.malas;
+      const total = state.malas * 108 + state.beads;
+      summaryEl.textContent = `Today's Total: ${total} chants • Screen stays awake while active`;
+    }
+    saveAndRender();
+
+    // --- Gentle Chime & Vibration Feedback ---
+    let audioCtx = null;
+    function playChime(isMalaComplete) {
+      if (navigator.vibrate) navigator.vibrate(isMalaComplete ? [200, 100, 200, 100, 400] : 50);
+      if (!audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(isMalaComplete ? 528 : 432, audioCtx.currentTime);
+      gain.gain.setValueAtTime(isMalaComplete ? 0.25 : 0.06, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + (isMalaComplete ? 1.2 : 0.25));
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + (isMalaComplete ? 1.2 : 0.25));
+    }
+
+    function incrementCount() {
+      state.beads += 1;
+      if (state.beads >= 108) {
+        state.beads = 0;
+        state.malas += 1;
+        playChime(true);
+      } else {
+        playChime(false);
+      }
+      saveAndRender();
+    }
+
+    // --- Sliders & UI Bindings ---
+    const threshSlider = document.getElementById("threshSlider");
+    const minSecSlider = document.getElementById("minSecSlider");
+    const maxSecSlider = document.getElementById("maxSecSlider");
+    const pauseSecSlider = document.getElementById("pauseSecSlider");
+    const threshMarker = document.getElementById("threshMarker");
+
+    function updateLabels() {
+      document.getElementById("threshVal").textContent = threshSlider.value;
+      document.getElementById("minSecVal").textContent = parseFloat(minSecSlider.value).toFixed(1) + "s";
+      document.getElementById("maxSecVal").textContent = parseFloat(maxSecSlider.value).toFixed(1) + "s";
+      document.getElementById("pauseSecVal").textContent = parseFloat(pauseSecSlider.value).toFixed(1) + "s";
+      threshMarker.style.left = threshSlider.value + "%";
+    }
+    [threshSlider, minSecSlider, maxSecSlider, pauseSecSlider].forEach(s => s.addEventListener("input", updateLabels));
+    updateLabels();
+
+    document.getElementById("manualBtn").addEventListener("click", () => {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      incrementCount();
+    });
+
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      if (confirm("Reset today's bead and mala count to 0?")) {
+        state = { beads: 0, malas: 0 };
+        saveAndRender();
+      }
+    });
+
+    // --- Audio Processing & Dishwashing Noise Filter ---
+    let isRunning = false;
+    let micStream = null;
+    let analyser = null;
+    let wakeLock = null;
+    let rafId = null;
+
+    let isSpeaking = false;
+    let burstStart = 0;
+    let silenceStart = 0;
+    let lastBurstDuration = 0;
+    let isCalibrating = false;
+    let calibrationSamples = [];
+
+    const statusBadge = document.getElementById("statusBadge");
+    const timerText = document.getElementById("timerText");
+    const volBar = document.getElementById("volBar");
+    const toggleBtn = document.getElementById("toggleBtn");
+
+    async function requestWakeLock() {
+      try {
+        if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen");
+      } catch (e) {}
+    }
+
+    async function startListening() {
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === "suspended") await audioCtx.resume();
+
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false }
+        });
+
+        const source = audioCtx.createMediaStreamSource(micStream);
+
+        // Bandpass filter isolates human voice (300Hz - 3000Hz) & cuts low water rumble / high clinks
+        const bandpass = audioCtx.createBiquadFilter();
+        bandpass.type = "bandpass";
+        bandpass.frequency.value = 1100;
+        bandpass.Q.value = 0.7;
+
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 512;
+
+        source.connect(bandpass);
+        bandpass.connect(analyser);
+
+        isRunning = true;
+        toggleBtn.textContent = "Stop Listening";
+        toggleBtn.classList.add("active");
+        statusBadge.textContent = "Listening";
+        statusBadge.className = "badge listening";
+        await requestWakeLock();
+        processAudio();
+      } catch (err) {
+        alert("Microphone access denied or unavailable. Ensure this page is opened over HTTPS.");
+      }
+    }
+
+    function stopListening() {
+      isRunning = false;
+      cancelAnimationFrame(rafId);
+      if (micStream) micStream.getTracks().forEach(t => t.stop());
+      if (wakeLock) { wakeLock.release(); wakeLock = null; }
+      toggleBtn.textContent = "Start Voice Counting";
+      toggleBtn.classList.remove("active");
+      statusBadge.textContent = "Idle";
+      statusBadge.className = "badge";
+      volBar.style.width = "0%";
+    }
+
+    toggleBtn.addEventListener("click", () => (isRunning ? stopListening() : startListening()));
+
+    document.getElementById("calibrateBtn").addEventListener("click", () => {
+      if (!isRunning) return alert("Tap 'Start Voice Counting' first while your background noise is present.");
+      calibrationSamples = [];
+      isCalibrating = true;
+      statusBadge.textContent = "Calibrating...";
+      setTimeout(() => {
+        isCalibrating = false;
+        if (calibrationSamples.length > 0) {
+          const avgNoise = calibrationSamples.reduce((a, b) => a + b, 0) / calibrationSamples.length;
+          const recommended = Math.min(80, Math.max(10, Math.round(avgNoise + 10)));
+          threshSlider.value = recommended;
+          updateLabels();
+        }
+        statusBadge.textContent = "Listening";
+      }, 2000);
+    });
+
+    function processAudio() {
+      if (!isRunning) return;
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteTimeDomainData(data);
+
+      let sumSquares = 0;
+      for (let i = 0; i < data.length; i++) {
+        const normalized = (data[i] - 128) / 128;
+        sumSquares += normalized * normalized;
+      }
+      const rms = Math.sqrt(sumSquares / data.length);
+      const level = Math.min(100, Math.round(rms * 350));
+      volBar.style.width = level + "%";
+
+      if (isCalibrating) calibrationSamples.push(level);
+
+      const threshold = parseInt(threshSlider.value, 10);
+      const minSec = parseFloat(minSecSlider.value);
+      const maxSec = parseFloat(maxSecSlider.value);
+      const pauseSec = parseFloat(pauseSecSlider.value);
+      const now = performance.now();
+
+      if (level >= threshold) {
+        if (!isSpeaking) {
+          isSpeaking = true;
+          burstStart = now;
+          silenceStart = 0;
+        }
+        const currentBurst = (now - burstStart) / 1000;
+        lastBurstDuration = currentBurst;
+
+        if (currentBurst > maxSec) {
+          statusBadge.textContent = "Ignored (Too Long / Water)";
+          statusBadge.className = "badge rejected";
+        } else {
+          statusBadge.textContent = "Chanting...";
+          statusBadge.className = "badge chanting";
+        }
+        timerText.textContent = `Burst: ${currentBurst.toFixed(1)}s | Pause: 0.0s`;
+      } else {
+        if (isSpeaking) {
+          if (silenceStart === 0) silenceStart = now;
+          const currentPause = (now - silenceStart) / 1000;
+          timerText.textContent = `Burst: ${lastBurstDuration.toFixed(1)}s | Pause: ${currentPause.toFixed(1)}s`;
+
+          if (currentPause >= pauseSec) {
+            if (lastBurstDuration >= minSec && lastBurstDuration <= maxSec) {
+              incrementCount();
+            }
+            isSpeaking = false;
+            lastBurstDuration = 0;
+            silenceStart = 0;
+            statusBadge.textContent = "Listening";
+            statusBadge.className = "badge listening";
+          }
+        }
+      }
+      rafId = requestAnimationFrame(processAudio);
+    }
+  </script>
+</body>
+</html>
