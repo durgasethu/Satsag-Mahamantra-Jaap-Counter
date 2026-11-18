@@ -53,12 +53,17 @@ input[type=range] { width: 100%; accent-color: #f59e0b; }
   </div>
 </div>
 <script>
-var key = "jaap_" + new Date().toISOString().slice(0, 10);
+var key = "jaap_v2_" + new Date().toISOString().slice(0, 10);
 var st = JSON.parse(localStorage.getItem(key)) || { b: 0, m: 0 };
+if (typeof st.b !== "number" || isNaN(st.b)) st.b = 0;
+if (typeof st.m !== "number" || isNaN(st.m)) st.m = 0;
+
 var bEl = document.getElementById("bEl"), mEl = document.getElementById("mEl"), lg = document.getElementById("lg");
 function draw() { localStorage.setItem(key, JSON.stringify(st)); bEl.textContent = st.b; mEl.textContent = st.m; }
 draw();
-function addOne() { st.b++; if (st.b >= 108) { st.b = 0; st.m++; } draw(); }
+
+function addOne() { st.b = st.b + 1; if (st.b >= 108) { st.b = 0; st.m = st.m + 1; } draw(); }
+
 var r1 = document.getElementById("r1"), r2 = document.getElementById("r2"), r3 = document.getElementById("r3"), r4 = document.getElementById("r4");
 function upd() {
   document.getElementById("v1").textContent = r1.value;
@@ -68,60 +73,115 @@ function upd() {
   document.getElementById("mk").style.left = r1.value + "%";
 }
 r1.oninput = upd; r2.oninput = upd; r3.oninput = upd; r4.oninput = upd; upd();
+
 document.getElementById("tap").onclick = function() { addOne(); lg.textContent = "Manual +1 added"; };
 document.getElementById("rst").onclick = function() { if (confirm("Reset today?")) { st = { b: 0, m: 0 }; draw(); } };
-var run = false, stream = null, an = null, ctx = null, raf = null, ch = false, t0 = 0, tLast = 0, cal = false, samples = [];
+
+var run = false, stream = null, an = null, ctx = null, raf = null, ch = false, t0 = 0, tLast = 0, cal = false;
+var samples = new Array();
 var btn = document.getElementById("btn"), sEl = document.getElementById("sEl"), tEl = document.getElementById("tEl"), fl = document.getElementById("fl");
+
 btn.onclick = async function() {
   if (run) {
-    run = false; cancelAnimationFrame(raf);
+    run = false;
+    cancelAnimationFrame(raf);
     if (stream) stream.getTracks().forEach(function(t) { t.stop(); });
-    btn.textContent = "Start Voice Counting"; btn.classList.remove("on"); sEl.textContent = "Idle"; fl.style.width = "0%";
+    btn.textContent = "Start Voice Counting";
+    btn.classList.remove("on");
+    sEl.textContent = "Idle";
+    fl.style.width = "0%";
     return;
   }
   try {
-    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    var AudioCtx = window.AudioContext || window.webkitAudioContext;
+    ctx = new AudioCtx();
     if (ctx.state === "suspended") await ctx.resume();
-    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true } });
+
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    });
+
     var src = ctx.createMediaStreamSource(stream);
-    var bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 1000; bp.Q.value = 0.5;
-    an = ctx.createAnalyser(); an.fftSize = 512;
-    src.connect(bp); bp.connect(an);
-    run = true; btn.textContent = "Stop Listening"; btn.classList.add("on"); sEl.textContent = "Listening";
-    lg.textContent = "Listening... chant your 16 words";
+    var gain = ctx.createGain();
+    gain.gain.value = 3.0;
+
+    var bp = ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = 900;
+    bp.Q.value = 0.5;
+
+    an = ctx.createAnalyser();
+    an.fftSize = 512;
+
+    src.connect(gain);
+    gain.connect(bp);
+    bp.connect(an);
+
+    run = true;
+    btn.textContent = "Stop Listening";
+    btn.classList.add("on");
+    sEl.textContent = "Listening";
+    lg.textContent = "Listening on iPhone... chant 1 round";
     loop();
-  } catch (e) { alert("Mic error: " + e.message); }
+  } catch (e) {
+    alert("Mic error: " + e.message);
+  }
 };
+
 document.getElementById("cal").onclick = function() {
   if (!run) return alert("Tap Start Voice Counting first.");
-  samples = []; cal = true; sEl.textContent = "Calibrating...";
+  samples = new Array();
+  cal = true;
+  sEl.textContent = "Calibrating...";
   setTimeout(function() {
     cal = false;
-    if (samples.length) {
-      var avg = samples.reduce(function(a, b) { return a + b; }, 0) / samples.length;
-      r1.value = Math.min(75, Math.max(5, Math.round(avg + 6))); upd();
+    if (samples.length > 0) {
+      var sum = samples.reduce(function(a, b) { return a + b; }, 0);
+      var avg = sum / samples.length;
+      r1.value = Math.min(75, Math.max(5, Math.round(avg + 6)));
+      upd();
       lg.textContent = "Calibrated threshold to " + r1.value;
     }
     sEl.textContent = "Listening";
   }, 2000);
 };
+
 function loop() {
   if (!run) return;
-  var d = new Uint8Array(an.frequencyBinCount); an.getByteTimeDomainData(d);
-  var sq = 0; for (var i = 0; i < d.length; i++) { var n = (d[i] - 128) / 128; sq += n * n; }
-  var lv = Math.min(100, Math.round(Math.sqrt(sq / d.length) * 800));
+  var d = new Uint8Array(an.frequencyBinCount);
+  an.getByteTimeDomainData(d);
+  var sq = 0;
+  for (var i = 0; i < d.length; i++) {
+    var n = (d[i] - 128) / 128;
+    sq += n * n;
+  }
+  var lv = Math.min(100, Math.round(Math.sqrt(sq / d.length) * 600));
   fl.style.width = lv + "%";
   if (cal) samples.push(lv);
-  var th = Number(r1.value), mn = Number(r2.value), mx = Number(r3.value), ps = Number(r4.value), now = Date.now();
-  if (lv >= th) { if (!ch) { ch = true; t0 = now; } tLast = now; }
+
+  var th = Number(r1.value), mn = Number(r2.value), mx = Number(r3.value), ps = Number(r4.value);
+  var now = Date.now();
+
+  if (lv >= th) {
+    if (!ch) { ch = true; t0 = now; }
+    tLast = now;
+  }
+
   if (ch) {
-    var gap = (now - tLast) / 1000, dur = (tLast - t0) / 1000;
+    var gap = (now - tLast) / 1000;
+    var dur = (tLast - t0) / 1000;
     sEl.textContent = dur > mx ? "Too Long" : "Chanting...";
     tEl.textContent = "Chant: " + dur.toFixed(1) + "s | Pause: " + gap.toFixed(1) + "s";
     if (gap >= ps) {
-      if (dur >= mn && dur <= mx) { addOne(); lg.textContent = "Counted +1 (" + dur.toFixed(1) + "s)"; }
-      else { lg.textContent = "Skipped (" + dur.toFixed(1) + "s)"; }
-      ch = false; sEl.textContent = "Listening"; tEl.textContent = "Chant: 0.0s | Pause: 0.0s";
+      if (dur >= mn && dur <= mx) {
+        addOne();
+        lg.textContent = "Counted +1 (" + dur.toFixed(1) + "s)";
+      } else {
+        lg.textContent = "Skipped (" + dur.toFixed(1) + "s)";
+      }
+      ch = false;
+      sEl.textContent = "Listening";
+      tEl.textContent = "Chant: 0.0s | Pause: 0.0s";
     }
   }
   raf = requestAnimationFrame(loop);
