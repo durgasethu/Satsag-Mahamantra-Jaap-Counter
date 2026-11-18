@@ -45,7 +45,7 @@
     .bar-bg { width: 100%; height: 16px; background: #090807; border-radius: 99px; overflow: hidden; position: relative; }
     .bar-fill { height: 100%; width: 0%; background: var(--green); transition: width 0.05s linear; }
     .threshold-marker { position: absolute; top: 0; bottom: 0; width: 3px; background: var(--accent); z-index: 2; }
-    .last-log { margin-top: 8px; font-size: 0.8rem; color: var(--accent); text-align: center; }
+    .last-log { margin-top: 8px; font-size: 0.82rem; color: var(--accent); text-align: center; font-weight: 500; }
     .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     button {
       border: none; border-radius: 12px; padding: 14px; font-size: 1rem; font-weight: 600;
@@ -126,31 +126,31 @@
   </div>
 
   <script>
-    const todayKey = "jaap_" + new Date().toISOString().slice(0, 10);
-    let state = JSON.parse(localStorage.getItem(todayKey)) || { beads: 0, malas: 0 };
+    var todayKey = "jaap_" + new Date().toISOString().slice(0, 10);
+    var state = JSON.parse(localStorage.getItem(todayKey)) || { beads: 0, malas: 0 };
 
-    const beadEl = document.getElementById("beadCount");
-    const malaEl = document.getElementById("malaCount");
-    const summaryEl = document.getElementById("todaySummary");
-    const lastLogEl = document.getElementById("lastLog");
+    var beadEl = document.getElementById("beadCount");
+    var malaEl = document.getElementById("malaCount");
+    var summaryEl = document.getElementById("todaySummary");
+    var lastLogEl = document.getElementById("lastLog");
 
     function saveAndRender() {
       localStorage.setItem(todayKey, JSON.stringify(state));
       beadEl.textContent = state.beads;
       malaEl.textContent = state.malas;
-      const total = state.malas * 108 + state.beads;
+      var total = state.malas * 108 + state.beads;
       summaryEl.textContent = "Today's Total: " + total + " chants";
     }
     saveAndRender();
 
-    let audioCtx = null;
+    var audioCtx = null;
     function playChime(isMalaComplete) {
       if (navigator.vibrate) {
-        navigator.vibrate(isMalaComplete ? [200, 100, 200] : 50);
+        navigator.vibrate(isMalaComplete ? new Array(150, 80, 150) : 50);
       }
       if (!audioCtx) return;
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
       osc.type = "sine";
       osc.frequency.setValueAtTime(isMalaComplete ? 528 : 432, audioCtx.currentTime);
       gain.gain.setValueAtTime(isMalaComplete ? 0.25 : 0.06, audioCtx.currentTime);
@@ -173,11 +173,11 @@
       saveAndRender();
     }
 
-    const threshSlider = document.getElementById("threshSlider");
-    const minSecSlider = document.getElementById("minSecSlider");
-    const maxSecSlider = document.getElementById("maxSecSlider");
-    const pauseSecSlider = document.getElementById("pauseSecSlider");
-    const threshMarker = document.getElementById("threshMarker");
+    var threshSlider = document.getElementById("threshSlider");
+    var minSecSlider = document.getElementById("minSecSlider");
+    var maxSecSlider = document.getElementById("maxSecSlider");
+    var pauseSecSlider = document.getElementById("pauseSecSlider");
+    var threshMarker = document.getElementById("threshMarker");
 
     function updateLabels() {
       document.getElementById("threshVal").textContent = threshSlider.value;
@@ -186,9 +186,10 @@
       document.getElementById("pauseSecVal").textContent = parseFloat(pauseSecSlider.value).toFixed(1) + "s";
       threshMarker.style.left = threshSlider.value + "%";
     }
-    [threshSlider, minSecSlider, maxSecSlider, pauseSecSlider].forEach(function(s) {
-      s.addEventListener("input", updateLabels);
-    });
+    threshSlider.addEventListener("input", updateLabels);
+    minSecSlider.addEventListener("input", updateLabels);
+    maxSecSlider.addEventListener("input", updateLabels);
+    pauseSecSlider.addEventListener("input", updateLabels);
     updateLabels();
 
     document.getElementById("manualBtn").addEventListener("click", function() {
@@ -204,17 +205,15 @@
       }
     });
 
-    let isRunning = false;
-    let micStream = null;
-    let analyser = null;
-    let wakeLock = null;
-    let rafId = null;
+    var isRunning = false;
+    var micStream = null;
+    var analyser = null;
+    var wakeLock = null;
+    var rafId = null;
 
-    let isChanting = false;
-    let chantStart = 0;
-    let lastVoiceTime = 0;
-    let isCalibrating = false;
-    let calibrationSamples = [];
+    var isChanting = false;
+    var chantStart = 0;
+    var lastVoiceTime = 0;
+    var isCalibrating = false;
+    var calibrationSamples = new Array();
 
-    const statusBadge = document.getElementById("statusBadge");
-    const timerText = document.getElementById("timerText");
