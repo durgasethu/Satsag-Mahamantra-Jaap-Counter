@@ -146,7 +146,7 @@
     var audioCtx = null;
     function playChime(isMalaComplete) {
       if (navigator.vibrate) {
-        navigator.vibrate(isMalaComplete ? new Array(150, 80, 150) : 50);
+        navigator.vibrate(isMalaComplete ? 200 : 50);
       }
       if (!audioCtx) return;
       var osc = audioCtx.createOscillator();
