@@ -37,7 +37,7 @@ input[type=range] { width: 100%; accent-color: #f59e0b; }
   <div class="card">
     <div class="row"><span id="tEl">Chant: 0.0s | Pause: 0.0s</span><span id="sEl">Idle</span></div>
     <div class="bar"><div class="mark" id="mk" style="left:14%"></div><div class="fill" id="fl"></div></div>
-    <div class="log" id="lg">Ready. Lock-screen media keep-alive enabled.</div>
+    <div class="log" id="lg">Ready. Lock-screen keep-alive enabled.</div>
   </div>
   <div class="grid">
     <button class="main" id="btn">Start Voice Counting</button>
@@ -59,20 +59,12 @@ if (typeof st.b !== "number" || isNaN(st.b)) st.b = 0;
 if (typeof st.m !== "number" || isNaN(st.m)) st.m = 0;
 
 var bEl = document.getElementById("bEl"), mEl = document.getElementById("mEl"), lg = document.getElementById("lg");
-function updateMediaTitle() {
+function updateMedia() {
   if ("mediaSession" in navigator) {
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: "Bead " + st.b + " / 108 (Malas: " + st.m + ")",
-      artist: "Mahamantra Jaap Counter"
-    });
+    navigator.mediaSession.metadata = new MediaMetadata({ title: "Bead " + st.b + " / 108 (Malas: " + st.m + ")", artist: "Jaap Counter" });
   }
 }
-function draw() {
-  localStorage.setItem(key, JSON.stringify(st));
-  bEl.textContent = st.b;
-  mEl.textContent = st.m;
-  updateMediaTitle();
-}
+function draw() { localStorage.setItem(key, JSON.stringify(st)); bEl.textContent = st.b; mEl.textContent = st.m; updateMedia(); }
 draw();
 
 function addOne() { st.b = st.b + 1; if (st.b >= 108) { st.b = 0; st.m = st.m + 1; } draw(); }
@@ -90,143 +82,79 @@ r1.oninput = upd; r2.oninput = upd; r3.oninput = upd; r4.oninput = upd; upd();
 document.getElementById("tap").onclick = function() { addOne(); lg.textContent = "Manual +1 added"; };
 document.getElementById("rst").onclick = function() { if (confirm("Reset today?")) { st = { b: 0, m: 0 }; draw(); } };
 
-// Silent 1-second WAV loop keeps iOS Safari active behind the Lock Screen
-var keepAliveAudio = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA");
-keepAliveAudio.loop = true;
+var keepAlive = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA");
+keepAlive.loop = true;
 
-var run = false, stream = null, ctx = null, an = null, timer = null, wakeLock = null;
-var ch = false, t0 = 0, tLast = 0, cal = false, smoothLv = 0, activeFrames = 0, totalFrames = 0;
+var run = false, stream = null, ctx = null, an = null, timer = null, ch = false, t0 = 0, tLast = 0, cal = false, smoothLv = 0, actF = 0, totF = 0;
 var samples = new Array();
 var btn = document.getElementById("btn"), sEl = document.getElementById("sEl"), tEl = document.getElementById("tEl"), fl = document.getElementById("fl");
 
-async function keepAwake() {
-  try {
-    if ("wakeLock" in navigator && !wakeLock) {
-      wakeLock = await navigator.wakeLock.request("screen");
-      wakeLock.addEventListener("release", function() { wakeLock = null; });
-    }
-  } catch (e) {}
-}
-
 btn.onclick = async function() {
   if (run) {
-    run = false;
-    clearInterval(timer);
-    keepAliveAudio.pause();
+    run = false; clearInterval(timer); keepAlive.pause();
     if (stream) stream.getTracks().forEach(function(t) { t.stop(); });
-    if (wakeLock) { wakeLock.release(); wakeLock = null; }
-    btn.textContent = "Start Voice Counting";
-    btn.classList.remove("on");
-    sEl.textContent = "Idle";
-    fl.style.width = "0%";
+    btn.textContent = "Start Voice Counting"; btn.classList.remove("on"); sEl.textContent = "Idle"; fl.style.width = "0%";
     return;
   }
   try {
-    await keepAliveAudio.play();
-    updateMediaTitle();
-
-    var AudioCtx = window.AudioContext || window.webkitAudioContext;
-    ctx = new AudioCtx();
+    await keepAlive.play(); updateMedia();
+    var AC = window.AudioContext || window.webkitAudioContext;
+    ctx = new AC();
     if (ctx.state !== "running") await ctx.resume();
-
-    // Auto-resume if iOS marks AudioContext as interrupted on screen lock
-    ctx.onstatechange = function() {
-      if (run && ctx.state !== "running") {
-        ctx.resume();
-      }
-    };
+    ctx.onstatechange = function() { if (run && ctx.state !== "running") ctx.resume(); };
 
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     var src = ctx.createMediaStreamSource(stream);
-    var gain = ctx.createGain();
-    gain.gain.value = 3.5;
+    var gain = ctx.createGain(); gain.gain.value = 3.5;
+    an = ctx.createAnalyser(); an.fftSize = 512;
+    src.connect(gain); gain.connect(an);
 
-    an = ctx.createAnalyser();
-    an.fftSize = 512;
-    src.connect(gain);
-    gain.connect(an);
+    run = true; smoothLv = 0;
+    btn.textContent = "Stop Listening"; btn.classList.add("on"); sEl.textContent = "Listening";
+    lg.textContent = "Listening... Lock screen shows bead count.";
 
-    run = true;
-    smoothLv = 0;
-    await keepAwake();
-    btn.textContent = "Stop Listening";
-    btn.classList.add("on");
-    sEl.textContent = "Listening";
-    lg.textContent = "Active! Lock screen shows live bead count.";
-
-    // setInterval runs continuously alongside active media playback even when locked
     timer = setInterval(function() {
       if (!run) return;
       if (ctx.state !== "running") ctx.resume();
-
-      var d = new Uint8Array(an.frequencyBinCount);
-      an.getByteTimeDomainData(d);
-      var sq = 0;
-      for (var i = 0; i < d.length; i++) {
-        var n = (d[i] - 128) / 128;
-        sq += n * n;
-      }
-      var rawLv = Math.min(100, Math.round(Math.sqrt(sq / d.length) * 800));
-      if (rawLv > smoothLv) {
-        smoothLv = rawLv;
-      } else {
-        smoothLv = smoothLv * 0.85;
-      }
+      var d = new Uint8Array(an.frequencyBinCount); an.getByteTimeDomainData(d);
+      var sq = 0; for (var i = 0; i < d.length; i++) { var n = (d[i] - 128) / 128; sq += n * n; }
+      var raw = Math.min(100, Math.round(Math.sqrt(sq / d.length) * 800));
+      smoothLv = raw > smoothLv ? raw : smoothLv * 0.85;
       var lv = Math.round(smoothLv);
-
-      if (document.visibilityState === "visible") {
-        fl.style.width = lv + "%";
-      }
+      if (document.visibilityState === "visible") fl.style.width = lv + "%";
       if (cal) samples.push(lv);
 
-      var th = Number(r1.value), mn = Number(r2.value), mx = Number(r3.value), ps = Number(r4.value);
-      var now = Date.now();
-
-      if (lv >= th) {
-        if (!ch) { ch = true; t0 = now; activeFrames = 0; totalFrames = 0; }
-        tLast = now;
-        activeFrames++;
-      }
-
+      var th = Number(r1.value), mn = Number(r2.value), mx = Number(r3.value), ps = Number(r4.value), now = Date.now();
+      if (lv >= th) { if (!ch) { ch = true; t0 = now; actF = 0; totF = 0; } tLast = now; actF++; }
       if (ch) {
-        totalFrames++;
-        var gap = (now - tLast) / 1000;
-        var dur = (tLast - t0) / 1000;
-        if (document.visibilityState === "visible") {
-          sEl.textContent = dur > mx ? "Too Long" : "Chanting...";
-          tEl.textContent = "Chant: " + dur.toFixed(1) + "s | Pause: " + gap.toFixed(1) + "s";
-        }
+        totF++;
+        var gap = (now - tLast) / 1000, dur = (tLast - t0) / 1000;
+        if (document.visibilityState === "visible") { sEl.textContent = dur > mx ? "Too Long" : "Chanting..."; tEl.textContent = "Chant: " + dur.toFixed(1) + "s | Pause: " + gap.toFixed(1) + "s"; }
         if (gap >= ps) {
-          var density = activeFrames / Math.max(1, totalFrames);
-          if (dur >= mn && dur <= mx && density >= 0.45) {
-            addOne();
-            lg.textContent = "Counted +1 (" + dur.toFixed(1) + "s)";
-          } else if (density < 0.45) {
-            lg.textContent = "Ignored background noise";
-          } else {
-            lg.textContent = "Skipped (" + dur.toFixed(1) + "s)";
-          }
+          var dens = actF / Math.max(1, totF);
+          if (dur >= mn && dur <= mx && dens >= 0.45) { addOne(); lg.textContent = "Counted +1 (" + dur.toFixed(1) + "s)"; }
+          else { lg.textContent = "Skipped (" + dur.toFixed(1) + "s)"; }
           ch = false;
-          if (document.visibilityState === "visible") {
-            sEl.textContent = "Listening";
-            tEl.textContent = "Chant: 0.0s | Pause: 0.0s";
-          }
+          if (document.visibilityState === "visible") { sEl.textContent = "Listening"; tEl.textContent = "Chant: 0.0s | Pause: 0.0s"; }
         }
       }
     }, 50);
-  } catch (e) {
-    alert("Mic error: " + e.message);
-  }
+  } catch (e) { alert("Mic error: " + e.message); }
 };
 
 document.getElementById("cal").onclick = function() {
   if (!run) return alert("Tap Start Voice Counting first.");
-  samples = new Array();
-  cal = true;
-  sEl.textContent = "Calibrating...";
+  samples = new Array(); cal = true; sEl.textContent = "Calibrating...";
   setTimeout(function() {
     cal = false;
     if (samples.length > 0) {
       var peak = Math.max.apply(null, samples);
-      r1.value = Math.min(75, Math.max(8, peak + 4));
-      upd();
+      r1.value = Math.min(75, Math.max(8, peak + 4)); upd();
+      lg.textContent = "Calibrated threshold to " + r1.value;
+    }
+    sEl.textContent = "Listening";
+  }, 2000);
+};
+</script>
+</body>
+</html>
