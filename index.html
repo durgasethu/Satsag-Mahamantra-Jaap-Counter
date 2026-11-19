@@ -18,7 +18,7 @@ body { margin: 0; padding: 16px; background: #12100e; color: #f8fafc; font-famil
 .fill { height: 100%; width: 0%; background: #10b981; }
 .mark { position: absolute; top: 0; bottom: 0; width: 3px; background: #f59e0b; }
 .log { margin-top: 8px; font-size: 0.82rem; color: #f59e0b; }
-button { border: none; border-radius: 12px; padding: 14px; font-size: 1rem; font-weight: 600; cursor: pointer; touch-action: manipulation; }
+button { border: none; border-radius: 12px; padding: 14px; font-size: 1rem; font-weight: 600; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 .main { background: #f59e0b; color: #12100e; grid-column: span 2; }
 .main.on { background: #ef4444; color: #fff; }
 .sec { background: #2e2822; color: #f8fafc; }
@@ -52,10 +52,8 @@ input[type=range] { width: 100%; accent-color: #f59e0b; }
     <button class="sec" id="rst" style="width:100%;margin-top:10px;padding:10px;font-size:0.85rem">Reset Today</button>
   </div>
 </div>
-<canvas id="cv" width="2" height="2" style="position:fixed;opacity:0.01;pointer-events:none"></canvas>
-<video id="vid" playsinline muted loop style="position:fixed;width:2px;height:2px;opacity:0.01;pointer-events:none"></video>
 <script>
-var key = "jaap_v3_" + new Date().toISOString().slice(0, 10);
+var key = "jaap_v4_" + new Date().toISOString().slice(0, 10);
 var st = { b: 0, m: 0 };
 try {
   var saved = JSON.parse(localStorage.getItem(key));
@@ -90,47 +88,38 @@ r1.oninput = upd; r2.oninput = upd; r3.oninput = upd; r4.oninput = upd; upd();
 document.getElementById("tap").onclick = function() { addOne(); lg.textContent = "Manual +1 added"; };
 document.getElementById("rst").onclick = function() { st = { b: 0, m: 0 }; draw(); lg.textContent = "Reset to 0"; };
 
-var run = false, stream = null, ctx = null, an = null, raf = null, wakeLock = null;
+var run = false, busy = false, stream = null, ctx = null, an = null, raf = null;
 var ch = false, t0 = 0, tLast = 0, cal = false, smoothLv = 0, actF = 0, totF = 0;
 var samples = new Array();
 var btn = document.getElementById("btn"), sEl = document.getElementById("sEl"), tEl = document.getElementById("tEl"), fl = document.getElementById("fl");
-var vid = document.getElementById("vid"), cv = document.getElementById("cv");
-
-async function keepAwake() {
-  try {
-    if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen");
-  } catch (e) {}
-  try {
-    var c2d = cv.getContext("2d");
-    c2d.fillStyle = "#000";
-    c2d.fillRect(0, 0, 2, 2);
-    vid.srcObject = cv.captureStream(1);
-    await vid.play();
-  } catch (e) {}
-}
-
-function releaseAwake() {
-  try { if (wakeLock) { wakeLock.release(); wakeLock = null; } } catch (e) {}
-  try { vid.pause(); vid.srcObject = null; } catch (e) {}
-}
 
 btn.onclick = async function() {
+  if (busy) return;
+  busy = true;
+
   if (run) {
     run = false;
     if (raf) cancelAnimationFrame(raf);
-    if (stream) stream.getTracks().forEach(function(t) { t.stop(); });
-    if (ctx) { try { ctx.close(); } catch (e) {} ctx = null; }
-    releaseAwake();
+    if (stream) { stream.getTracks().forEach(function(t) { t.stop(); }); stream = null; }
+    if (ctx) { ctx.suspend(); }
     btn.textContent = "Start Voice Counting";
     btn.classList.remove("on");
     sEl.textContent = "Idle";
     fl.style.width = "0%";
+    lg.textContent = "Stopped.";
+    busy = false;
     return;
   }
+
+  btn.textContent = "Starting Mic...";
   try {
     var AC = window.AudioContext || window.webkitAudioContext;
-    ctx = new AC();
-    if (ctx.state === "suspended") await ctx.resume();
+    if (!ctx) {
+      ctx = new AC();
+    }
+    if (ctx.state === "suspended") {
+      await ctx.resume();
+    }
 
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     var src = ctx.createMediaStreamSource(stream);
@@ -143,16 +132,18 @@ btn.onclick = async function() {
     gain.connect(an);
 
     run = true;
+    ch = false;
     smoothLv = 0;
-    await keepAwake();
     btn.textContent = "Stop Listening";
     btn.classList.add("on");
     sEl.textContent = "Listening";
-    lg.textContent = "Listening (video wake-lock active)...";
+    lg.textContent = "Listening... chant your 16 words";
     loop();
   } catch (e) {
-    alert("Mic error: " + e.message);
+    btn.textContent = "Start Voice Counting";
+    lg.textContent = "Mic error: " + e.message;
   }
+  busy = false;
 };
 
 document.getElementById("cal").onclick = function() {
