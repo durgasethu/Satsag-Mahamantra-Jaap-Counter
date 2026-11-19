@@ -58,6 +58,14 @@ input[type=range]{width:100%;accent-color:#f59e0b}
     <button class="danger" id="rstAll">Reset All Counts</button>
   </div>
 </div>
-<script src="app.js?v=18"></script>
+<script>
+  var isAndroid = /Android/i.test(navigator.userAgent);
+  var s = document.createElement("script");
+  s.src = isAndroid ? "app-android.js?v=22" : "app-ios.js?v=22";
+  document.body.appendChild(s);
+</script>
+</body>
+</html>
+
 </body>
 </html>
