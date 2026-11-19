@@ -36,8 +36,8 @@ input[type=range] { width: 100%; accent-color: #f59e0b; }
   </div>
   <div class="card">
     <div class="row"><span id="tEl">Chant: 0.0s | Pause: 0.0s</span><span id="sEl">Idle</span></div>
-    <div class="bar"><div class="mark" id="mk" style="left:6%"></div><div class="fill" id="fl"></div></div>
-    <div class="log" id="lg">Ready. Tap Start Voice Counting.</div>
+    <div class="bar"><div class="mark" id="mk" style="left:14%"></div><div class="fill" id="fl"></div></div>
+    <div class="log" id="lg">Ready. Counts even when screen sleeps.</div>
   </div>
   <div class="grid">
     <button class="main" id="btn">Start Voice Counting</button>
@@ -45,10 +45,10 @@ input[type=range] { width: 100%; accent-color: #f59e0b; }
     <button class="sec" id="cal">Calibrate Noise</button>
   </div>
   <div class="card">
-    <div class="sgrp"><div><span>Voice Threshold</span><span id="v1">6</span></div><input type="range" id="r1" min="2" max="80" value="6"></div>
-    <div class="sgrp"><div><span>Min Mantra (sec)</span><span id="v2">3.5s</span></div><input type="range" id="r2" min="2" max="8" step="0.1" value="3.5"></div>
-    <div class="sgrp"><div><span>Max Cutoff (sec)</span><span id="v3">11.0s</span></div><input type="range" id="r3" min="6" max="15" step="0.5" value="11"></div>
-    <div class="sgrp"><div><span>Breath Pause (sec)</span><span id="v4">1.1s</span></div><input type="range" id="r4" min="0.4" max="2.5" step="0.1" value="1.1"></div>
+    <div class="sgrp"><div><span>Voice Threshold</span><span id="v1">14</span></div><input type="range" id="r1" min="2" max="80" value="14"></div>
+    <div class="sgrp"><div><span>Min Mantra (sec)</span><span id="v2">4.0s</span></div><input type="range" id="r2" min="2" max="8" step="0.1" value="4.0"></div>
+    <div class="sgrp"><div><span>Max Cutoff (sec)</span><span id="v3">10.0s</span></div><input type="range" id="r3" min="6" max="15" step="0.5" value="10"></div>
+    <div class="sgrp"><div><span>Breath Pause (sec)</span><span id="v4">1.3s</span></div><input type="range" id="r4" min="0.4" max="2.5" step="0.1" value="1.3"></div>
     <button class="sec" id="rst" style="width:100%;margin-top:10px;padding:10px;font-size:0.85rem">Reset Today</button>
   </div>
 </div>
@@ -77,15 +77,30 @@ r1.oninput = upd; r2.oninput = upd; r3.oninput = upd; r4.oninput = upd; upd();
 document.getElementById("tap").onclick = function() { addOne(); lg.textContent = "Manual +1 added"; };
 document.getElementById("rst").onclick = function() { if (confirm("Reset today?")) { st = { b: 0, m: 0 }; draw(); } };
 
-var run = false, stream = null, an = null, ctx = null, raf = null, ch = false, t0 = 0, tLast = 0, cal = false, smoothLv = 0;
+var run = false, stream = null, ctx = null, proc = null, wakeLock = null;
+var ch = false, t0 = 0, tLast = 0, cal = false, smoothLv = 0, activeFrames = 0, totalFrames = 0;
 var samples = new Array();
 var btn = document.getElementById("btn"), sEl = document.getElementById("sEl"), tEl = document.getElementById("tEl"), fl = document.getElementById("fl");
+
+async function keepAwake() {
+  try {
+    if ("wakeLock" in navigator && !wakeLock) {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", function() { wakeLock = null; });
+    }
+  } catch (e) {}
+}
+
+document.addEventListener("visibilitychange", function() {
+  if (run && document.visibilityState === "visible") keepAwake();
+});
 
 btn.onclick = async function() {
   if (run) {
     run = false;
-    cancelAnimationFrame(raf);
+    if (proc) { proc.disconnect(); proc = null; }
     if (stream) stream.getTracks().forEach(function(t) { t.stop(); });
+    if (wakeLock) { wakeLock.release(); wakeLock = null; }
     btn.textContent = "Start Voice Counting";
     btn.classList.remove("on");
     sEl.textContent = "Idle";
@@ -100,21 +115,81 @@ btn.onclick = async function() {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     var src = ctx.createMediaStreamSource(stream);
     var gain = ctx.createGain();
-    gain.gain.value = 4.0;
+    gain.gain.value = 3.5;
 
-    an = ctx.createAnalyser();
-    an.fftSize = 512;
+    // ScriptProcessor runs on the audio thread even when screen locks
+    proc = ctx.createScriptProcessor(2048, 1, 1);
+    var silentGain = ctx.createGain();
+    silentGain.gain.value = 0;
+
+    proc.onaudioprocess = function(e) {
+      if (!run) return;
+      var input = e.inputBuffer.getChannelData(0);
+      var sq = 0;
+      for (var i = 0; i < input.length; i++) {
+        sq += input[i] * input[i];
+      }
+      var rawLv = Math.min(100, Math.round(Math.sqrt(sq / input.length) * 400));
+      if (rawLv > smoothLv) {
+        smoothLv = rawLv;
+      } else {
+        smoothLv = smoothLv * 0.85;
+      }
+      var lv = Math.round(smoothLv);
+
+      if (document.visibilityState === "visible") {
+        fl.style.width = lv + "%";
+      }
+      if (cal) samples.push(lv);
+
+      var th = Number(r1.value), mn = Number(r2.value), mx = Number(r3.value), ps = Number(r4.value);
+      var now = Date.now();
+
+      if (lv >= th) {
+        if (!ch) { ch = true; t0 = now; activeFrames = 0; totalFrames = 0; }
+        tLast = now;
+        activeFrames++;
+      }
+
+      if (ch) {
+        totalFrames++;
+        var gap = (now - tLast) / 1000;
+        var dur = (tLast - t0) / 1000;
+        if (document.visibilityState === "visible") {
+          sEl.textContent = dur > mx ? "Too Long" : "Chanting...";
+          tEl.textContent = "Chant: " + dur.toFixed(1) + "s | Pause: " + gap.toFixed(1) + "s";
+        }
+        if (gap >= ps) {
+          var density = activeFrames / Math.max(1, totalFrames);
+          if (dur >= mn && dur <= mx && density >= 0.45) {
+            addOne();
+            lg.textContent = "Counted +1 (" + dur.toFixed(1) + "s)";
+          } else if (density < 0.45) {
+            lg.textContent = "Ignored background noise";
+          } else {
+            lg.textContent = "Skipped (" + dur.toFixed(1) + "s)";
+          }
+          ch = false;
+          if (document.visibilityState === "visible") {
+            sEl.textContent = "Listening";
+            tEl.textContent = "Chant: 0.0s | Pause: 0.0s";
+          }
+        }
+      }
+    };
 
     src.connect(gain);
-    gain.connect(an);
+    gain.connect(proc);
+    proc.connect(silentGain);
+    silentGain.connect(ctx.destination);
 
     run = true;
     smoothLv = 0;
+    await keepAwake();
     btn.textContent = "Stop Listening";
     btn.classList.add("on");
     sEl.textContent = "Listening";
-    lg.textContent = "Listening... chant 1 round";
-    loop();
+    lg.textContent = "Listening (screen-sleep ready)...";
   } catch (e) {
     alert("Mic error: " + e.message);
   }
@@ -128,62 +203,14 @@ document.getElementById("cal").onclick = function() {
   setTimeout(function() {
     cal = false;
     if (samples.length > 0) {
-      var sum = samples.reduce(function(a, b) { return a + b; }, 0);
-      var avg = sum / samples.length;
-      r1.value = Math.min(75, Math.max(4, Math.round(avg + 5)));
+      var peak = Math.max.apply(null, samples);
+      r1.value = Math.min(75, Math.max(8, peak + 4));
       upd();
-      lg.textContent = "Calibrated threshold to " + r1.value;
+      lg.textContent = "Calibrated threshold above room peak (" + r1.value + ")";
     }
     sEl.textContent = "Listening";
   }, 2000);
 };
-
-function loop() {
-  if (!run) return;
-  var d = new Uint8Array(an.frequencyBinCount);
-  an.getByteTimeDomainData(d);
-  var sq = 0;
-  for (var i = 0; i < d.length; i++) {
-    var n = (d[i] - 128) / 128;
-    sq += n * n;
-  }
-  var rawLv = Math.min(100, Math.round(Math.sqrt(sq / d.length) * 900));
-  if (rawLv > smoothLv) {
-    smoothLv = rawLv;
-  } else {
-    smoothLv = smoothLv * 0.92;
-  }
-  var lv = Math.round(smoothLv);
-  fl.style.width = lv + "%";
-  if (cal) samples.push(lv);
-
-  var th = Number(r1.value), mn = Number(r2.value), mx = Number(r3.value), ps = Number(r4.value);
-  var now = Date.now();
-
-  if (lv >= th) {
-    if (!ch) { ch = true; t0 = now; }
-    tLast = now;
-  }
-
-  if (ch) {
-    var gap = (now - tLast) / 1000;
-    var dur = (tLast - t0) / 1000;
-    sEl.textContent = dur > mx ? "Too Long" : "Chanting...";
-    tEl.textContent = "Chant: " + dur.toFixed(1) + "s | Pause: " + gap.toFixed(1) + "s";
-    if (gap >= ps) {
-      if (dur >= mn && dur <= mx) {
-        addOne();
-        lg.textContent = "Counted +1 (" + dur.toFixed(1) + "s)";
-      } else {
-        lg.textContent = "Skipped (" + dur.toFixed(1) + "s)";
-      }
-      ch = false;
-      sEl.textContent = "Listening";
-      tEl.textContent = "Chant: 0.0s | Pause: 0.0s";
-    }
-  }
-  raf = requestAnimationFrame(loop);
-}
 </script>
 </body>
 </html>
