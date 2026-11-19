@@ -88,10 +88,23 @@ r1.oninput = upd; r2.oninput = upd; r3.oninput = upd; r4.oninput = upd; upd();
 document.getElementById("tap").onclick = function() { addOne(); lg.textContent = "Manual +1 added"; };
 document.getElementById("rst").onclick = function() { st = { b: 0, m: 0 }; draw(); lg.textContent = "Reset to 0"; };
 
-var run = false, busy = false, stream = null, ctx = null, an = null, raf = null;
+var run = false, busy = false, stream = null, ctx = null, an = null, raf = null, wakeLock = null;
 var ch = false, t0 = 0, tLast = 0, cal = false, smoothLv = 0, actF = 0, totF = 0;
 var samples = new Array();
 var btn = document.getElementById("btn"), sEl = document.getElementById("sEl"), tEl = document.getElementById("tEl"), fl = document.getElementById("fl");
+
+async function keepAwake() {
+  try {
+    if ("wakeLock" in navigator && !wakeLock) {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", function() { wakeLock = null; });
+    }
+  } catch (e) {}
+}
+
+document.addEventListener("visibilitychange", function() {
+  if (run && document.visibilityState === "visible") keepAwake();
+});
 
 btn.onclick = async function() {
   if (busy) return;
@@ -102,6 +115,7 @@ btn.onclick = async function() {
     if (raf) cancelAnimationFrame(raf);
     if (stream) { stream.getTracks().forEach(function(t) { t.stop(); }); stream = null; }
     if (ctx) { ctx.suspend(); }
+    if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
     btn.textContent = "Start Voice Counting";
     btn.classList.remove("on");
     sEl.textContent = "Idle";
@@ -134,10 +148,11 @@ btn.onclick = async function() {
     run = true;
     ch = false;
     smoothLv = 0;
+    keepAwake();
     btn.textContent = "Stop Listening";
     btn.classList.add("on");
     sEl.textContent = "Listening";
-    lg.textContent = "Listening... chant your 16 words";
+    lg.textContent = "Listening... screen stays awake";
     loop();
   } catch (e) {
     btn.textContent = "Start Voice Counting";
