@@ -1,4 +1,4 @@
-var key = "jaap_v11_all";
+var key = "jaap_v12_all";
 var vpKey = "jaap_vp_v7";
 var st = { b: 0, m: 0 };
 var vp = null;
@@ -11,7 +11,11 @@ try {
   if (svp && svp.length === 32) vp = svp;
 } catch (e) {}
 
-var bEl = document.getElementById("bEl"), mEl = document.getElementById("mEl"), lg = document.getElementById("lg"), trnBtn = document.getElementById("trn");
+var bEl = document.getElementById("bEl");
+var mEl = document.getElementById("mEl");
+var lg = document.getElementById("lg");
+var trnBtn = document.getElementById("trn");
+
 function draw() {
   try { localStorage.setItem(key, JSON.stringify(st)); } catch (e) {}
   bEl.textContent = st.b;
@@ -25,7 +29,12 @@ function addOne() {
   draw();
 }
 
-var r1 = document.getElementById("r1"), r2 = document.getElementById("r2"), r3 = document.getElementById("r3"), r4 = document.getElementById("r4"), r5 = document.getElementById("r5");
+var r1 = document.getElementById("r1");
+var r2 = document.getElementById("r2");
+var r3 = document.getElementById("r3");
+var r4 = document.getElementById("r4");
+var r5 = document.getElementById("r5");
+
 function upd() {
   document.getElementById("v1").textContent = r1.value;
   document.getElementById("v2").textContent = Number(r2.value).toFixed(1) + "s";
@@ -34,7 +43,12 @@ function upd() {
   document.getElementById("v5").textContent = r5.value + "%";
   document.getElementById("mk").style.left = r1.value + "%";
 }
-r1.oninput = upd; r2.oninput = upd; r3.oninput = upd; r4.oninput = upd; r5.oninput = upd; upd();
+r1.oninput = upd;
+r2.oninput = upd;
+r3.oninput = upd;
+r4.oninput = upd;
+r5.oninput = upd;
+upd();
 
 document.getElementById("tap").onclick = function() {
   addOne();
@@ -74,13 +88,24 @@ rstBtn.onclick = function() {
 
 var run = false, busy = false, stream = null, ctx = null, an = null, raf = null, wakeLock = null;
 var ch = false, t0 = 0, tLast = 0, smoothLv = 0, actF = 0, totF = 0, isTrn = false;
-var trnList = [], curSpecs = [];
-var btn = document.getElementById("btn"), sEl = document.getElementById("sEl"), tEl = document.getElementById("tEl"), fl = document.getElementById("fl");
+var trnList = new Array();
+var curSpecs = new Array();
+var btn = document.getElementById("btn");
+var sEl = document.getElementById("sEl");
+var tEl = document.getElementById("tEl");
+var fl = document.getElementById("fl");
 
 function updTrn() {
-  if (isTrn) { trnBtn.textContent = "Chant Round " + (trnList.length + 1) + " of 3 Now..."; trnBtn.classList.add("active"); }
-  else if (vp) { trnBtn.textContent = "Voiceprint Active (Retrain 3 Rounds)"; trnBtn.classList.remove("active"); }
-  else { trnBtn.textContent = "Train My Voice (3 Rounds)"; trnBtn.classList.remove("active"); }
+  if (isTrn) {
+    trnBtn.textContent = "Chant Round " + (trnList.length + 1) + " of 3 Now...";
+    trnBtn.classList.add("active");
+  } else if (vp) {
+    trnBtn.textContent = "Voiceprint Active (Retrain 3 Rounds)";
+    trnBtn.classList.remove("active");
+  } else {
+    trnBtn.textContent = "Train My Voice (3 Rounds)";
+    trnBtn.classList.remove("active");
+  }
 }
 updTrn();
 
@@ -101,7 +126,9 @@ clrVpBtn.onclick = function() {
     clearTimeout(vpTimer);
     vpConfirm = false;
     clrVpBtn.textContent = "Clear Voiceprint";
-    vp = null; isTrn = false; trnList = [];
+    vp = null;
+    isTrn = false;
+    trnList = new Array();
     try { localStorage.removeItem(vpKey); } catch (e) {}
     updTrn();
     lg.textContent = "Voiceprint cleared.";
@@ -110,40 +137,71 @@ clrVpBtn.onclick = function() {
 
 trnBtn.onclick = function() {
   if (!run) { lg.textContent = "Tap Start Voice Counting first."; return; }
-  isTrn = true; trnList = []; curSpecs = []; ch = false;
+  isTrn = true;
+  trnList = new Array();
+  curSpecs = new Array();
+  ch = false;
   updTrn();
   lg.textContent = "Training: Chant Round 1 of 3 clearly...";
 };
 
 function norm(v) {
-  var m = 0; for (var i = 0; i < v.length; i++) m += v[i] * v[i];
-  m = Math.sqrt(m); if (m === 0) return v;
-  var o = []; for (var j = 0; j < v.length; j++) o.push(v[j] / m); return o;
+  var m = 0;
+  for (var i = 0; i < v.length; i++) m += v[i] * v[i];
+  m = Math.sqrt(m);
+  if (m === 0) return v;
+  var o = new Array();
+  for (var j = 0; j < v.length; j++) o.push(v[j] / m);
+  return o;
 }
 
 function sim(a, b) {
   var d = 0, ma = 0, mb = 0;
-  for (var i = 0; i < a.length; i++) { d += a[i] * b[i]; ma += a[i] * a[i]; mb += b[i] * b[i]; }
+  for (var i = 0; i < a.length; i++) {
+    d += a[i] * b[i];
+    ma += a[i] * a[i];
+    mb += b[i] * b[i];
+  }
   return (ma === 0 || mb === 0) ? 0 : d / (Math.sqrt(ma) * Math.sqrt(mb));
 }
 
 function avgSpec(list) {
-  var a = []; for (var x = 0; x < 32; x++) a.push(0);
+  var a = new Array();
+  for (var x = 0; x < 32; x++) a.push(0);
   if (list.length === 0) return a;
-  for (var i = 0; i < list.length; i++) { for (var b = 0; b < 32; b++) a[b] += list[i][b]; }
-  for (var k = 0; k < 32; k++) a[k] /= list.length; return norm(a);
+  for (var i = 0; i < list.length; i++) {
+    for (var b = 0; b < 32; b++) a[b] += list[i][b];
+  }
+  for (var k = 0; k < 32; k++) a[k] /= list.length;
+  return norm(a);
 }
 
 async function keepAwake() {
-  try { if ("wakeLock" in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); } } catch (e) {}
+  try {
+    if ("wakeLock" in navigator && !wakeLock) {
+      wakeLock = await navigator.wakeLock.request("screen");
+    }
+  } catch (e) {}
 }
 
 function stopAudio() {
-  run = false; isTrn = false; ch = false; updTrn();
+  run = false;
+  isTrn = false;
+  ch = false;
+  updTrn();
   if (raf) cancelAnimationFrame(raf);
-  if (stream) { stream.getTracks().forEach(function(t) { t.stop(); }); stream = null; }
-  if (ctx) { try { ctx.close(); } catch (e) {} ctx = null; }
-  if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
+  if (stream) {
+    stream.getTracks().forEach(function(t) { t.stop(); });
+    stream = null;
+  }
+  if (ctx) {
+    try { ctx.close(); } catch (e) {}
+    ctx = null;
+  }
+  if (wakeLock) {
+    try { wakeLock.release(); } catch (e) {}
+    wakeLock = null;
+  }
   btn.textContent = "Start Voice Counting";
   btn.classList.remove("on");
   sEl.textContent = "Idle";
@@ -161,7 +219,7 @@ btn.onclick = async function() {
   }
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false }
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
     });
     var AudioCtx = window.AudioContext || window.webkitAudioContext;
     ctx = new AudioCtx();
@@ -191,8 +249,8 @@ btn.onclick = async function() {
         var v = (timeData[i] - 128) / 128;
         sum += v * v;
       }
-      var rms = Math.sqrt(sum / timeData.length) * 250;
-      smoothLv = smoothLv * 0.65 + rms * 0.35;
+      var rms = Math.sqrt(sum / timeData.length) * 350;
+      smoothLv = smoothLv * 0.6 + rms * 0.4;
       fl.style.width = Math.min(100, smoothLv) + "%";
 
       var thr = Number(r1.value);
@@ -202,7 +260,7 @@ btn.onclick = async function() {
       var strict = Number(r5.value) / 100;
       var now = performance.now() / 1000;
 
-      var spec = [];
+      var spec = new Array();
       for (var b = 0; b < 32; b++) {
         var bSum = 0;
         for (var k = 0; k < 4; k++) bSum += freqData[b * 4 + k] || 0;
@@ -215,7 +273,7 @@ btn.onclick = async function() {
           t0 = now;
           actF = 0;
           totF = 0;
-          curSpecs = [];
+          curSpecs = new Array();
         }
         tLast = now;
         actF++;
@@ -236,8 +294,8 @@ btn.onclick = async function() {
       if (ch && (pau >= pauseMax || (now - t0) >= maxM)) {
         ch = false;
         var ratio = totF > 0 ? (actF / totF) : 0;
-        var minReq = isTrn ? Math.min(minM, 2.5) : minM;
-        var ratioReq = isTrn ? 0.25 : 0.35;
+        var minReq = isTrn ? Math.min(minM, 2.0) : minM;
+        var ratioReq = isTrn ? 0.2 : 0.35;
 
         if (dur >= minReq && ratio > ratioReq && curSpecs.length > 0) {
           var roundSpec = avgSpec(curSpecs);
@@ -281,3 +339,5 @@ btn.onclick = async function() {
   }
   busy = false;
 };
+
+lg.textContent = "v12 Ready. Tap Start Voice Counting.";
