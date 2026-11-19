@@ -22,9 +22,10 @@ button{border:none;border-radius:12px;padding:14px;font-size:1rem;font-weight:60
 .main{background:#f59e0b;color:#12100e;grid-column:span 2}
 .main.on{background:#ef4444;color:#fff}
 .sec{background:#2e2822;color:#f8fafc}
-.danger{background:#451a1a;color:#fca5a5;border:1px solid #7f1d1d;grid-column:span 2}
 .train{background:#1d4ed8;color:#fff;grid-column:span 2}
 .train.active{background:#7c3aed;color:#fff}
+.danger{background:#450a0a;color:#fca5a5;width:100%;margin-top:12px;padding:12px;font-size:.9rem}
+.danger.confirming{background:#dc2626;color:#fff}
 .sgrp{text-align:left;font-size:.82rem;color:#94a3b8;margin-top:8px}
 .sgrp div{display:flex;justify-content:space-between;color:#f8fafc}
 input[type=range]{width:100%;accent-color:#f59e0b}
@@ -47,7 +48,6 @@ input[type=range]{width:100%;accent-color:#f59e0b}
     <button class="train" id="trn">Train My Voice (3 Rounds)</button>
     <button class="sec" id="tap">+1 Manual Tap</button>
     <button class="sec" id="clrVp">Clear Voiceprint</button>
-    <button class="danger" id="rstAll">Reset All Counts</button>
   </div>
   <div class="card">
     <div class="sgrp"><div><span>Voice Threshold</span><span id="v1">18</span></div><input type="range" id="r1" min="2" max="80" value="18"></div>
@@ -55,6 +55,7 @@ input[type=range]{width:100%;accent-color:#f59e0b}
     <div class="sgrp"><div><span>Min Mantra (sec)</span><span id="v2">3.8s</span></div><input type="range" id="r2" min="2" max="8" step="0.1" value="3.8"></div>
     <div class="sgrp"><div><span>Max Cutoff (sec)</span><span id="v3">10.5s</span></div><input type="range" id="r3" min="6" max="15" step="0.5" value="10.5"></div>
     <div class="sgrp"><div><span>Breath Pause (sec)</span><span id="v4">1.2s</span></div><input type="range" id="r4" min="0.4" max="2.5" step="0.1" value="1.2"></div>
+    <button class="danger" id="rstAll">Reset All Counts</button>
   </div>
 </div>
 <script src="app.js"></script>
