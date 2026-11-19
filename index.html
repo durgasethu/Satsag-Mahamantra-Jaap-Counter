@@ -18,7 +18,7 @@ body { margin: 0; padding: 16px; background: #12100e; color: #f8fafc; font-famil
 .fill { height: 100%; width: 0%; background: #10b981; }
 .mark { position: absolute; top: 0; bottom: 0; width: 3px; background: #f59e0b; }
 .log { margin-top: 8px; font-size: 0.82rem; color: #f59e0b; }
-button { border: none; border-radius: 12px; padding: 14px; font-size: 1rem; font-weight: 600; cursor: pointer; }
+button { border: none; border-radius: 12px; padding: 14px; font-size: 1rem; font-weight: 600; cursor: pointer; touch-action: manipulation; }
 .main { background: #f59e0b; color: #12100e; grid-column: span 2; }
 .main.on { background: #ef4444; color: #fff; }
 .sec { background: #2e2822; color: #f8fafc; }
@@ -37,7 +37,7 @@ input[type=range] { width: 100%; accent-color: #f59e0b; }
   <div class="card">
     <div class="row"><span id="tEl">Chant: 0.0s | Pause: 0.0s</span><span id="sEl">Idle</span></div>
     <div class="bar"><div class="mark" id="mk" style="left:14%"></div><div class="fill" id="fl"></div></div>
-    <div class="log" id="lg">Ready. Lock-screen keep-alive enabled.</div>
+    <div class="log" id="lg">Ready. Tap Start Voice Counting.</div>
   </div>
   <div class="grid">
     <button class="main" id="btn">Start Voice Counting</button>
@@ -53,21 +53,27 @@ input[type=range] { width: 100%; accent-color: #f59e0b; }
   </div>
 </div>
 <script>
-var key = "jaap_v2_" + new Date().toISOString().slice(0, 10);
-var st = JSON.parse(localStorage.getItem(key)) || { b: 0, m: 0 };
-if (typeof st.b !== "number" || isNaN(st.b)) st.b = 0;
-if (typeof st.m !== "number" || isNaN(st.m)) st.m = 0;
+var key = "jaap_v3_" + new Date().toISOString().slice(0, 10);
+var st = { b: 0, m: 0 };
+try {
+  var saved = JSON.parse(localStorage.getItem(key));
+  if (saved && typeof saved.b === "number" && !isNaN(saved.b)) st.b = saved.b;
+  if (saved && typeof saved.m === "number" && !isNaN(saved.m)) st.m = saved.m;
+} catch (e) {}
 
 var bEl = document.getElementById("bEl"), mEl = document.getElementById("mEl"), lg = document.getElementById("lg");
-function updateMedia() {
-  if ("mediaSession" in navigator) {
-    navigator.mediaSession.metadata = new MediaMetadata({ title: "Bead " + st.b + " / 108 (Malas: " + st.m + ")", artist: "Jaap Counter" });
-  }
+function draw() {
+  try { localStorage.setItem(key, JSON.stringify(st)); } catch (e) {}
+  bEl.textContent = st.b;
+  mEl.textContent = st.m;
 }
-function draw() { localStorage.setItem(key, JSON.stringify(st)); bEl.textContent = st.b; mEl.textContent = st.m; updateMedia(); }
 draw();
 
-function addOne() { st.b = st.b + 1; if (st.b >= 108) { st.b = 0; st.m = st.m + 1; } draw(); }
+function addOne() {
+  st.b = st.b + 1;
+  if (st.b >= 108) { st.b = 0; st.m = st.m + 1; }
+  draw();
+}
 
 var r1 = document.getElementById("r1"), r2 = document.getElementById("r2"), r3 = document.getElementById("r3"), r4 = document.getElementById("r4");
 function upd() {
@@ -80,81 +86,119 @@ function upd() {
 r1.oninput = upd; r2.oninput = upd; r3.oninput = upd; r4.oninput = upd; upd();
 
 document.getElementById("tap").onclick = function() { addOne(); lg.textContent = "Manual +1 added"; };
-document.getElementById("rst").onclick = function() { if (confirm("Reset today?")) { st = { b: 0, m: 0 }; draw(); } };
+document.getElementById("rst").onclick = function() { st = { b: 0, m: 0 }; draw(); lg.textContent = "Reset to 0"; };
 
-var keepAlive = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA");
-keepAlive.loop = true;
-
-var run = false, stream = null, ctx = null, an = null, timer = null, ch = false, t0 = 0, tLast = 0, cal = false, smoothLv = 0, actF = 0, totF = 0;
-var samples = new Array();
+var run = false, stream = null, ctx = null, an = null, raf = null, wakeLock = null;
+var ch = false, t0 = 0, tLast = 0, cal = false, smoothLv = 0, actF = 0, totF = 0, samples = [];
 var btn = document.getElementById("btn"), sEl = document.getElementById("sEl"), tEl = document.getElementById("tEl"), fl = document.getElementById("fl");
+
+async function keepAwake() {
+  try {
+    if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen");
+  } catch (e) {}
+}
 
 btn.onclick = async function() {
   if (run) {
-    run = false; clearInterval(timer); keepAlive.pause();
+    run = false;
+    if (raf) cancelAnimationFrame(raf);
     if (stream) stream.getTracks().forEach(function(t) { t.stop(); });
-    btn.textContent = "Start Voice Counting"; btn.classList.remove("on"); sEl.textContent = "Idle"; fl.style.width = "0%";
+    if (ctx) { try { ctx.close(); } catch (e) {} ctx = null; }
+    if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
+    btn.textContent = "Start Voice Counting";
+    btn.classList.remove("on");
+    sEl.textContent = "Idle";
+    fl.style.width = "0%";
     return;
   }
   try {
-    await keepAlive.play(); updateMedia();
     var AC = window.AudioContext || window.webkitAudioContext;
     ctx = new AC();
-    if (ctx.state !== "running") await ctx.resume();
-    ctx.onstatechange = function() { if (run && ctx.state !== "running") ctx.resume(); };
+    if (ctx.state === "suspended") await ctx.resume();
 
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     var src = ctx.createMediaStreamSource(stream);
-    var gain = ctx.createGain(); gain.gain.value = 3.5;
-    an = ctx.createAnalyser(); an.fftSize = 512;
-    src.connect(gain); gain.connect(an);
+    var gain = ctx.createGain();
+    gain.gain.value = 3.5;
 
-    run = true; smoothLv = 0;
-    btn.textContent = "Stop Listening"; btn.classList.add("on"); sEl.textContent = "Listening";
-    lg.textContent = "Listening... Lock screen shows bead count.";
+    an = ctx.createAnalyser();
+    an.fftSize = 256;
+    src.connect(gain);
+    gain.connect(an);
 
-    timer = setInterval(function() {
-      if (!run) return;
-      if (ctx.state !== "running") ctx.resume();
-      var d = new Uint8Array(an.frequencyBinCount); an.getByteTimeDomainData(d);
-      var sq = 0; for (var i = 0; i < d.length; i++) { var n = (d[i] - 128) / 128; sq += n * n; }
-      var raw = Math.min(100, Math.round(Math.sqrt(sq / d.length) * 800));
-      smoothLv = raw > smoothLv ? raw : smoothLv * 0.85;
-      var lv = Math.round(smoothLv);
-      if (document.visibilityState === "visible") fl.style.width = lv + "%";
-      if (cal) samples.push(lv);
-
-      var th = Number(r1.value), mn = Number(r2.value), mx = Number(r3.value), ps = Number(r4.value), now = Date.now();
-      if (lv >= th) { if (!ch) { ch = true; t0 = now; actF = 0; totF = 0; } tLast = now; actF++; }
-      if (ch) {
-        totF++;
-        var gap = (now - tLast) / 1000, dur = (tLast - t0) / 1000;
-        if (document.visibilityState === "visible") { sEl.textContent = dur > mx ? "Too Long" : "Chanting..."; tEl.textContent = "Chant: " + dur.toFixed(1) + "s | Pause: " + gap.toFixed(1) + "s"; }
-        if (gap >= ps) {
-          var dens = actF / Math.max(1, totF);
-          if (dur >= mn && dur <= mx && dens >= 0.45) { addOne(); lg.textContent = "Counted +1 (" + dur.toFixed(1) + "s)"; }
-          else { lg.textContent = "Skipped (" + dur.toFixed(1) + "s)"; }
-          ch = false;
-          if (document.visibilityState === "visible") { sEl.textContent = "Listening"; tEl.textContent = "Chant: 0.0s | Pause: 0.0s"; }
-        }
-      }
-    }, 50);
-  } catch (e) { alert("Mic error: " + e.message); }
+    run = true;
+    smoothLv = 0;
+    keepAwake();
+    btn.textContent = "Stop Listening";
+    btn.classList.add("on");
+    sEl.textContent = "Listening";
+    lg.textContent = "Listening on iPhone...";
+    loop();
+  } catch (e) {
+    alert("Mic error: " + e.message);
+  }
 };
 
 document.getElementById("cal").onclick = function() {
   if (!run) return alert("Tap Start Voice Counting first.");
-  samples = new Array(); cal = true; sEl.textContent = "Calibrating...";
+  samples = [];
+  cal = true;
+  sEl.textContent = "Calibrating...";
   setTimeout(function() {
     cal = false;
     if (samples.length > 0) {
       var peak = Math.max.apply(null, samples);
-      r1.value = Math.min(75, Math.max(8, peak + 4)); upd();
+      r1.value = Math.min(75, Math.max(8, peak + 4));
+      upd();
       lg.textContent = "Calibrated threshold to " + r1.value;
     }
     sEl.textContent = "Listening";
   }, 2000);
 };
+
+function loop() {
+  if (!run) return;
+  var d = new Uint8Array(an.frequencyBinCount);
+  an.getByteTimeDomainData(d);
+  var sq = 0;
+  for (var i = 0; i < d.length; i++) {
+    var n = (d[i] - 128) / 128;
+    sq += n * n;
+  }
+  var raw = Math.min(100, Math.round(Math.sqrt(sq / d.length) * 800));
+  smoothLv = raw > smoothLv ? raw : smoothLv * 0.85;
+  var lv = Math.round(smoothLv);
+  fl.style.width = lv + "%";
+  if (cal) samples.push(lv);
+
+  var th = Number(r1.value), mn = Number(r2.value), mx = Number(r3.value), ps = Number(r4.value);
+  var now = Date.now();
+
+  if (lv >= th) {
+    if (!ch) { ch = true; t0 = now; actF = 0; totF = 0; }
+    tLast = now;
+    actF++;
+  }
+  if (ch) {
+    totF++;
+    var gap = (now - tLast) / 1000, dur = (tLast - t0) / 1000;
+    sEl.textContent = dur > mx ? "Too Long" : "Chanting...";
+    tEl.textContent = "Chant: " + dur.toFixed(1) + "s | Pause: " + gap.toFixed(1) + "s";
+    if (gap >= ps) {
+      var dens = actF / Math.max(1, totF);
+      if (dur >= mn && dur <= mx && dens >= 0.45) {
+        addOne();
+        lg.textContent = "Counted +1 (" + dur.toFixed(1) + "s)";
+      } else {
+        lg.textContent = "Skipped (" + dur.toFixed(1) + "s)";
+      }
+      ch = false;
+      sEl.textContent = "Listening";
+      tEl.textContent = "Chant: 0.0s | Pause: 0.0s";
+    }
+  }
+  raf = requestAnimationFrame(loop);
+}
 </script>
 </body>
 </html>
