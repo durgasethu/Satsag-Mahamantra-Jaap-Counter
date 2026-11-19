@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Mahamantra Jaap Counter</title>
 <style>
-body { margin: 0; padding: 16px; background: #12100e; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, sans-serif; display: flex; flex-direction: column; align-items: center; }
+body { margin: 0; padding: 16px; background: #12100e; color: #f8fafc; font-family: -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; }
 .box { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 12px; }
 .card { background: #1e1a16; border: 1px solid #2e2822; border-radius: 14px; padding: 14px; text-align: center; }
 .mantra { color: #fde68a; font-weight: 600; line-height: 1.5; font-size: 1rem; }
@@ -17,8 +17,7 @@ body { margin: 0; padding: 16px; background: #12100e; color: #f8fafc; font-famil
 .bar { width: 100%; height: 14px; background: #090807; border-radius: 99px; overflow: hidden; position: relative; }
 .fill { height: 100%; width: 0%; background: #10b981; }
 .mark { position: absolute; top: 0; bottom: 0; width: 3px; background: #f59e0b; }
-.heard { margin-top: 6px; font-size: 0.78rem; color: #38bdf8; min-height: 1.1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.log { margin-top: 4px; font-size: 0.82rem; color: #f59e0b; font-weight: 500; }
+.log { margin-top: 8px; font-size: 0.82rem; color: #f59e0b; font-weight: 500; }
 button { border: none; border-radius: 12px; padding: 14px; font-size: 1rem; font-weight: 600; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 .main { background: #f59e0b; color: #12100e; grid-column: span 2; }
 .main.on { background: #ef4444; color: #fff; }
@@ -27,9 +26,7 @@ button { border: none; border-radius: 12px; padding: 14px; font-size: 1rem; font
 .train.active { background: #7c3aed; color: #fff; }
 .sgrp { text-align: left; font-size: 0.82rem; color: #94a3b8; margin-top: 8px; }
 .sgrp div { display: flex; justify-content: space-between; color: #f8fafc; }
-.trow { display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: #f8fafc; padding-bottom: 6px; border-bottom: 1px solid #2e2822; }
 input[type=range] { width: 100%; accent-color: #f59e0b; }
-input[type=checkbox] { width: 18px; height: 18px; accent-color: #f59e0b; }
 </style>
 </head>
 <body>
@@ -41,8 +38,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: #f59e0b; }
   </div>
   <div class="card">
     <div class="row"><span id="tEl">Chant: 0.0s | Pause: 0.0s</span><span id="sEl">Idle</span></div>
-    <div class="bar"><div class="mark" id="mk" style="left:16%"></div><div class="fill" id="fl"></div></div>
-    <div class="heard" id="hdEl"></div>
+    <div class="bar"><div class="mark" id="mk" style="left:18%"></div><div class="fill" id="fl"></div></div>
     <div class="log" id="lg">Ready. Tap Start Voice Counting.</div>
   </div>
   <div class="grid">
@@ -52,11 +48,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: #f59e0b; }
     <button class="sec" id="clrVp">Clear Voiceprint</button>
   </div>
   <div class="card">
-    <div class="trow">
-      <span>Verify Mantra Words (Speech AI)</span>
-      <input type="checkbox" id="spChk" checked>
-    </div>
-    <div class="sgrp"><div><span>Voice Threshold</span><span id="v1">16</span></div><input type="range" id="r1" min="2" max="80" value="16"></div>
+    <div class="sgrp"><div><span>Voice Threshold</span><span id="v1">18</span></div><input type="range" id="r1" min="2" max="80" value="18"></div>
     <div class="sgrp"><div><span>Voice Match Strictness</span><span id="v5">75%</span></div><input type="range" id="r5" min="50" max="95" step="1" value="75"></div>
     <div class="sgrp"><div><span>Min Mantra (sec)</span><span id="v2">3.8s</span></div><input type="range" id="r2" min="2" max="8" step="0.1" value="3.8"></div>
     <div class="sgrp"><div><span>Max Cutoff (sec)</span><span id="v3">10.5s</span></div><input type="range" id="r3" min="6" max="15" step="0.5" value="10.5"></div>
@@ -65,35 +57,24 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: #f59e0b; }
   </div>
 </div>
 <script>
-var key = "jaap_v6_" + new Date().toISOString().slice(0, 10);
-var vpKey = "jaap_voiceprint_v2";
+var key = "jaap_v7_" + new Date().toISOString().slice(0, 10);
+var vpKey = "jaap_vp_v3";
 var st = { b: 0, m: 0 };
-var voiceprint = null;
-
+var vp = null;
 try {
-  var saved = JSON.parse(localStorage.getItem(key));
-  if (saved && typeof saved.b === "number" && !isNaN(saved.b)) st.b = saved.b;
-  if (saved && typeof saved.m === "number" && !isNaN(saved.m)) st.m = saved.m;
-  var savedVp = JSON.parse(localStorage.getItem(vpKey));
-  if (savedVp && Array.isArray(savedVp) && savedVp.length === 32) voiceprint = savedVp;
+  var sv = JSON.parse(localStorage.getItem(key));
+  if (sv && typeof sv.b === "number" && !isNaN(sv.b)) st.b = sv.b;
+  if (sv && typeof sv.m === "number" && !isNaN(sv.m)) st.m = sv.m;
+  var svp = JSON.parse(localStorage.getItem(vpKey));
+  if (svp && Array.isArray(svp) && svp.length === 32) vp = svp;
 } catch (e) {}
 
-var bEl = document.getElementById("bEl"), mEl = document.getElementById("mEl"), lg = document.getElementById("lg"), hdEl = document.getElementById("hdEl"), trnBtn = document.getElementById("trn");
-
-function draw() {
-  try { localStorage.setItem(key, JSON.stringify(st)); } catch (e) {}
-  bEl.textContent = st.b;
-  mEl.textContent = st.m;
-}
+var bEl = document.getElementById("bEl"), mEl = document.getElementById("mEl"), lg = document.getElementById("lg"), trnBtn = document.getElementById("trn");
+function draw() { try { localStorage.setItem(key, JSON.stringify(st)); } catch (e) {} bEl.textContent = st.b; mEl.textContent = st.m; }
 draw();
+function addOne() { st.b++; if (st.b >= 108) { st.b = 0; st.m++; } draw(); }
 
-function addOne() {
-  st.b = st.b + 1;
-  if (st.b >= 108) { st.b = 0; st.m = st.m + 1; }
-  draw();
-}
-
-var r1 = document.getElementById("r1"), r2 = document.getElementById("r2"), r3 = document.getElementById("r3"), r4 = document.getElementById("r4"), r5 = document.getElementById("r5"), spChk = document.getElementById("spChk");
+var r1 = document.getElementById("r1"), r2 = document.getElementById("r2"), r3 = document.getElementById("r3"), r4 = document.getElementById("r4"), r5 = document.getElementById("r5");
 function upd() {
   document.getElementById("v1").textContent = r1.value;
   document.getElementById("v2").textContent = Number(r2.value).toFixed(1) + "s";
@@ -105,119 +86,90 @@ function upd() {
 r1.oninput = upd; r2.oninput = upd; r3.oninput = upd; r4.oninput = upd; r5.oninput = upd; upd();
 
 document.getElementById("tap").onclick = function() { addOne(); lg.textContent = "Manual +1 added"; };
-
 document.getElementById("rst").onclick = function() {
-  if (confirm("Reset today's progress? This will clear " + st.b + " beads and " + st.m + " completed malas back to 0.")) {
-    st = { b: 0, m: 0 };
-    draw();
-    lg.textContent = "Today's count reset to 0.";
+  if (confirm("Reset today's progress? This clears " + st.b + " beads and " + st.m + " malas.")) {
+    st = { b: 0, m: 0 }; draw(); lg.textContent = "Reset to 0.";
   }
 };
 
 var run = false, busy = false, stream = null, ctx = null, an = null, raf = null, wakeLock = null;
 var ch = false, t0 = 0, tLast = 0, smoothLv = 0, actF = 0, totF = 0;
-var isTraining = false, trainRounds = new Array(), currentRoundSpecs = new Array();
+var isTrn = false, trnList = new Array(), curSpecs = new Array();
 var btn = document.getElementById("btn"), sEl = document.getElementById("sEl"), tEl = document.getElementById("tEl"), fl = document.getElementById("fl");
 
-var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-var recog = null;
-var roundTranscript = "";
-
-function startSpeech() {
-  if (!SpeechRec || !spChk.checked || !run) return;
-  try {
-    recog = new SpeechRec();
-    recog.lang = "en-US";
-    recog.continuous = true;
-    recog.interimResults = true;
-    recog.onresult = function(e) {
-      var txt = "";
-      for (var i = e.resultIndex; i < e.results.length; i++) {
-        txt += e.results[i].transcript + " ";
-      }
-      if (txt.trim().length > 0) {
-        roundTranscript = (roundTranscript + " " + txt).toLowerCase();
-        hdEl.textContent = "Heard: \"" + txt.trim() + "\"";
-      }
-    };
-    recog.onend = function() {
-      if (run && spChk.checked) {
-        try { recog.start(); } catch (err) {}
-      }
-    };
-    recog.start();
-  } catch (e) {}
+function updTrn() {
+  if (isTrn) { trnBtn.textContent = "Chant Round " + (trnList.length + 1) + " of 3 Now..."; trnBtn.classList.add("active"); }
+  else if (vp) { trnBtn.textContent = "Voiceprint Active (Retrain 3 Rounds)"; trnBtn.classList.remove("active"); }
+  else { trnBtn.textContent = "Train My Voice (3 Rounds)"; trnBtn.classList.remove("active"); }
 }
-
-function stopSpeech() {
-  if (recog) {
-    try { recog.onend = null; recog.stop(); } catch (e) {}
-    recog = null;
-  }
-  hdEl.textContent = "";
-  roundTranscript = "";
-}
-
-spChk.onchange = function() {
-  if (run) {
-    if (spChk.checked) startSpeech();
-    else stopSpeech();
-  }
-};
-
-function updateTrainBtn() {
-  if (isTraining) {
-    trnBtn.textContent = "Chant Round " + (trainRounds.length + 1) + " of 3 Now...";
-    trnBtn.classList.add("active");
-  } else if (voiceprint) {
-    trnBtn.textContent = "Voiceprint Active (Retrain 3 Rounds)";
-    trnBtn.classList.remove("active");
-  } else {
-    trnBtn.textContent = "Train My Voice (3 Rounds)";
-    trnBtn.classList.remove("active");
-  }
-}
-updateTrainBtn();
+updTrn();
 
 document.getElementById("clrVp").onclick = function() {
-  if (!voiceprint) {
-    alert("No voiceprint is currently saved.");
-    return;
-  }
-  if (confirm("Clear your saved voiceprint? The app will stop filtering for your specific vocal pitch until you train it again.")) {
-    voiceprint = null;
-    isTraining = false;
-    trainRounds = new Array();
+  if (!vp) return alert("No voiceprint saved yet.");
+  if (confirm("Clear your saved voiceprint?")) {
+    vp = null; isTrn = false; trnList = new Array();
     try { localStorage.removeItem(vpKey); } catch (e) {}
-    updateTrainBtn();
-    lg.textContent = "Voiceprint cleared.";
+    updTrn(); lg.textContent = "Voiceprint cleared.";
   }
 };
 
 trnBtn.onclick = function() {
-  if (!run) {
-    alert("Tap 'Start Voice Counting' first, then tap 'Train My Voice' and chant 3 normal rounds.");
-    return;
-  }
-  isTraining = true;
-  trainRounds = new Array();
-  currentRoundSpecs = new Array();
-  ch = false;
-  updateTrainBtn();
-  lg.textContent = "Training: Chant Round 1 of 3 clearly...";
+  if (!run) return alert("Tap Start Voice Counting first, then tap Train My Voice.");
+  isTrn = true; trnList = new Array(); curSpecs = new Array(); ch = false;
+  updTrn(); lg.textContent = "Training: Chant Round 1 of 3 clearly...";
 };
 
-function normalizeVec(vec) {
-  var mag = 0;
-  for (var i = 0; i < vec.length; i++) mag += vec[i] * vec[i];
-  mag = Math.sqrt(mag);
-  if (mag === 0) return vec;
-  var out = new Array(vec.length);
-  for (var j = 0; j < vec.length; j++) out[j] = vec[j] / mag;
-  return out;
+function norm(v) {
+  var m = 0; for (var i = 0; i < v.length; i++) m += v[i] * v[i];
+  m = Math.sqrt(m); if (m === 0) return v;
+  var o = new Array(v.length); for (var j = 0; j < v.length; j++) o[j] = v[j] / m; return o;
+}
+function sim(a, b) {
+  var d = 0, ma = 0, mb = 0;
+  for (var i = 0; i < a.length; i++) { d += a[i] * b[i]; ma += a[i] * a[i]; mb += b[i] * b[i]; }
+  return (ma === 0 || mb === 0) ? 0 : d / (Math.sqrt(ma) * Math.sqrt(mb));
+}
+function avgSpec(list) {
+  var a = new Array(32).fill(0); if (list.length === 0) return a;
+  for (var i = 0; i < list.length; i++) { for (var b = 0; b < 32; b++) a[b] += list[i][b]; }
+  for (var k = 0; k < 32; k++) a[k] /= list.length; return norm(a);
 }
 
-function cosineSim(a, b) {
-  var dot = 0, magA = 0, magB = 0;
-  for (var i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
+async function keepAwake() {
+  try { if ("wakeLock" in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); } } catch (e) {}
+}
+
+btn.onclick = async function() {
+  if (busy) return; busy = true;
+  if (run) {
+    run = false; isTrn = false; updTrn();
+    if (raf) cancelAnimationFrame(raf);
+    if (stream) { stream.getTracks().forEach(function(t) { t.stop(); }); stream = null; }
+    if (ctx) ctx.suspend();
+    if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
+    btn.textContent = "Start Voice Counting"; btn.classList.remove("on"); sEl.textContent = "Idle"; fl.style.width = "0%"; lg.textContent = "Stopped.";
+    busy = false; return;
+  }
+  btn.textContent = "Starting Mic...";
+  try {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!ctx) ctx = new AC();
+    if (ctx.state === "suspended") await ctx.resume();
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false } });
+    var src = ctx.createMediaStreamSource(stream);
+    var flt = ctx.createBiquadFilter(); flt.type = "bandpass"; flt.frequency.value = 1000; flt.Q.value = 0.8;
+    var gn = ctx.createGain(); gn.gain.value = 2.0;
+    an = ctx.createAnalyser(); an.fftSize = 256;
+    src.connect(flt); flt.connect(gn); gn.connect(an);
+    run = true; ch = false; smoothLv = 0; keepAwake();
+    btn.textContent = "Stop Listening"; btn.classList.add("on"); sEl.textContent = "Listening";
+    lg.textContent = vp ? "Listening for YOUR voiceprint..." : "Listening (close-voice filter on)...";
+    loop();
+  } catch (e) { btn.textContent = "Start Voice Counting"; lg.textContent = "Mic error: " + e.message; }
+  busy = false;
+};
+
+function loop() {
+  if (!run) return;
+  var d = new Uint8Array(an.frequencyBinCount), fq = new Uint8Array(an.frequencyBinCount);
+  an.getByteTimeDomainData(d); an.getByteFrequencyData(fq);
