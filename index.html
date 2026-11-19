@@ -22,8 +22,6 @@ button { border: none; border-radius: 12px; padding: 14px; font-size: 1rem; font
 .main { background: #f59e0b; color: #12100e; grid-column: span 2; }
 .main.on { background: #ef4444; color: #fff; }
 .sec { background: #2e2822; color: #f8fafc; }
-.train { background: #1d4ed8; color: #fff; grid-column: span 2; }
-.train.active { background: #7c3aed; color: #fff; }
 .sgrp { text-align: left; font-size: 0.82rem; color: #94a3b8; margin-top: 6px; }
 .sgrp div { display: flex; justify-content: space-between; color: #f8fafc; }
 input[type=range] { width: 100%; accent-color: #f59e0b; }
@@ -37,19 +35,17 @@ input[type=range] { width: 100%; accent-color: #f59e0b; }
     <div class="card"><div class="lbl">Completed Malas</div><div class="val" id="mEl">0</div></div>
   </div>
   <div class="card">
-    <div class="row"><span id="tEl">Chant: 0.0s | Match: --</span><span id="sEl">Idle</span></div>
-    <div class="bar"><div class="mark" id="mk" style="left:18%"></div><div class="fill" id="fl"></div></div>
+    <div class="row"><span id="tEl">Chant: 0.0s | Pause: 0.0s</span><span id="sEl">Idle</span></div>
+    <div class="bar"><div class="mark" id="mk" style="left:14%"></div><div class="fill" id="fl"></div></div>
     <div class="log" id="lg">Ready. Tap Start Voice Counting.</div>
   </div>
   <div class="grid">
     <button class="main" id="btn">Start Voice Counting</button>
-    <button class="train" id="trn">Train My Voice (0/3 Rounds)</button>
     <button class="sec" id="tap">+1 Manual Tap</button>
-    <button class="sec" id="clrVp">Clear Voiceprint</button>
+    <button class="sec" id="cal">Calibrate Noise</button>
   </div>
   <div class="card">
-    <div class="sgrp"><div><span>Voice Threshold</span><span id="v1">18</span></div><input type="range" id="r1" min="2" max="80" value="18"></div>
-    <div class="sgrp"><div><span>Voice Match Strictness</span><span id="v5">75%</span></div><input type="range" id="r5" min="50" max="95" step="1" value="75"></div>
+    <div class="sgrp"><div><span>Voice Threshold</span><span id="v1">14</span></div><input type="range" id="r1" min="2" max="80" value="14"></div>
     <div class="sgrp"><div><span>Min Mantra (sec)</span><span id="v2">4.0s</span></div><input type="range" id="r2" min="2" max="8" step="0.1" value="4.0"></div>
     <div class="sgrp"><div><span>Max Cutoff (sec)</span><span id="v3">10.0s</span></div><input type="range" id="r3" min="6" max="15" step="0.5" value="10"></div>
     <div class="sgrp"><div><span>Breath Pause (sec)</span><span id="v4">1.3s</span></div><input type="range" id="r4" min="0.4" max="2.5" step="0.1" value="1.3"></div>
@@ -57,34 +53,15 @@ input[type=range] { width: 100%; accent-color: #f59e0b; }
   </div>
 </div>
 <script>
-var key = "jaap_v5_" + new Date().toISOString().slice(0, 10);
-var vpKey = "jaap_voiceprint_v1";
+var key = "jaap_v4_" + new Date().toISOString().slice(0, 10);
 var st = { b: 0, m: 0 };
-var voiceprint = null;
-
 try {
   var saved = JSON.parse(localStorage.getItem(key));
   if (saved && typeof saved.b === "number" && !isNaN(saved.b)) st.b = saved.b;
   if (saved && typeof saved.m === "number" && !isNaN(saved.m)) st.m = saved.m;
-  var savedVp = JSON.parse(localStorage.getItem(vpKey));
-  if (savedVp && Array.isArray(savedVp) && savedVp.length === 32) voiceprint = savedVp;
 } catch (e) {}
 
-var bEl = document.getElementById("bEl"), mEl = document.getElementById("mEl"), lg = document.getElementById("lg"), trnBtn = document.getElementById("trn");
-
-function updateTrainBtn() {
-  if (isTraining) {
-    trnBtn.textContent = "Chant Round " + (trainRounds.length + 1) + " of 3 Now...";
-    trnBtn.classList.add("active");
-  } else if (voiceprint) {
-    trnBtn.textContent = "Voiceprint Active (Retrain 3 Rounds)";
-    trnBtn.classList.remove("active");
-  } else {
-    trnBtn.textContent = "Train My Voice (3 Rounds)";
-    trnBtn.classList.remove("active");
-  }
-}
-
+var bEl = document.getElementById("bEl"), mEl = document.getElementById("mEl"), lg = document.getElementById("lg");
 function draw() {
   try { localStorage.setItem(key, JSON.stringify(st)); } catch (e) {}
   bEl.textContent = st.b;
@@ -98,79 +75,23 @@ function addOne() {
   draw();
 }
 
-var r1 = document.getElementById("r1"), r2 = document.getElementById("r2"), r3 = document.getElementById("r3"), r4 = document.getElementById("r4"), r5 = document.getElementById("r5");
+var r1 = document.getElementById("r1"), r2 = document.getElementById("r2"), r3 = document.getElementById("r3"), r4 = document.getElementById("r4");
 function upd() {
   document.getElementById("v1").textContent = r1.value;
   document.getElementById("v2").textContent = Number(r2.value).toFixed(1) + "s";
   document.getElementById("v3").textContent = Number(r3.value).toFixed(1) + "s";
   document.getElementById("v4").textContent = Number(r4.value).toFixed(1) + "s";
-  document.getElementById("v5").textContent = r5.value + "%";
   document.getElementById("mk").style.left = r1.value + "%";
 }
-r1.oninput = upd; r2.oninput = upd; r3.oninput = upd; r4.oninput = upd; r5.oninput = upd; upd();
+r1.oninput = upd; r2.oninput = upd; r3.oninput = upd; r4.oninput = upd; upd();
 
 document.getElementById("tap").onclick = function() { addOne(); lg.textContent = "Manual +1 added"; };
 document.getElementById("rst").onclick = function() { st = { b: 0, m: 0 }; draw(); lg.textContent = "Reset to 0"; };
 
 var run = false, busy = false, stream = null, ctx = null, an = null, raf = null, wakeLock = null;
-var ch = false, t0 = 0, tLast = 0, smoothLv = 0, actF = 0, totF = 0;
-var isTraining = false, trainRounds = new Array(), currentRoundSpecs = new Array();
+var ch = false, t0 = 0, tLast = 0, cal = false, smoothLv = 0, actF = 0, totF = 0;
+var samples = new Array();
 var btn = document.getElementById("btn"), sEl = document.getElementById("sEl"), tEl = document.getElementById("tEl"), fl = document.getElementById("fl");
-
-updateTrainBtn();
-
-document.getElementById("clrVp").onclick = function() {
-  voiceprint = null;
-  isTraining = false;
-  trainRounds = new Array();
-  try { localStorage.removeItem(vpKey); } catch (e) {}
-  updateTrainBtn();
-  lg.textContent = "Voiceprint cleared. Listening to any voice.";
-};
-
-trnBtn.onclick = function() {
-  if (!run) {
-    alert("Tap 'Start Voice Counting' first, then tap 'Train My Voice' and chant 3 normal rounds.");
-    return;
-  }
-  isTraining = true;
-  trainRounds = new Array();
-  currentRoundSpecs = new Array();
-  ch = false;
-  updateTrainBtn();
-  lg.textContent = "Training: Chant Round 1 of 3 clearly...";
-};
-
-function normalizeVec(vec) {
-  var mag = 0;
-  for (var i = 0; i < vec.length; i++) mag += vec[i] * vec[i];
-  mag = Math.sqrt(mag);
-  if (mag === 0) return vec;
-  var out = new Array(vec.length);
-  for (var j = 0; j < vec.length; j++) out[j] = vec[j] / mag;
-  return out;
-}
-
-function cosineSim(a, b) {
-  var dot = 0, magA = 0, magB = 0;
-  for (var i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    magA += a[i] * a[i];
-    magB += b[i] * b[i];
-  }
-  if (magA === 0 || magB === 0) return 0;
-  return dot / (Math.sqrt(magA) * Math.sqrt(magB));
-}
-
-function averageSpecs(list) {
-  var avg = new Array(32).fill(0);
-  if (list.length === 0) return avg;
-  for (var i = 0; i < list.length; i++) {
-    for (var b = 0; b < 32; b++) avg[b] += list[i][b];
-  }
-  for (var k = 0; k < 32; k++) avg[k] /= list.length;
-  return normalizeVec(avg);
-}
 
 async function keepAwake() {
   try {
@@ -191,8 +112,6 @@ btn.onclick = async function() {
 
   if (run) {
     run = false;
-    isTraining = false;
-    updateTrainBtn();
     if (raf) cancelAnimationFrame(raf);
     if (stream) { stream.getTracks().forEach(function(t) { t.stop(); }); stream = null; }
     if (ctx) { ctx.suspend(); }
@@ -209,29 +128,99 @@ btn.onclick = async function() {
   btn.textContent = "Starting Mic...";
   try {
     var AC = window.AudioContext || window.webkitAudioContext;
-    if (!ctx) ctx = new AC();
-    if (ctx.state === "suspended") await ctx.resume();
+    if (!ctx) {
+      ctx = new AC();
+    }
+    if (ctx.state === "suspended") {
+      await ctx.resume();
+    }
 
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false }
-    });
-
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     var src = ctx.createMediaStreamSource(stream);
-    var filter = ctx.createBiquadFilter();
-    filter.type = "bandpass";
-    filter.frequency.value = 1000;
-    filter.Q.value = 0.8;
-
     var gain = ctx.createGain();
-    gain.gain.value = 2.0;
+    gain.gain.value = 3.5;
 
     an = ctx.createAnalyser();
     an.fftSize = 256;
-    src.connect(filter);
-    filter.connect(gain);
+    src.connect(gain);
     gain.connect(an);
 
     run = true;
     ch = false;
     smoothLv = 0;
     keepAwake();
+    btn.textContent = "Stop Listening";
+    btn.classList.add("on");
+    sEl.textContent = "Listening";
+    lg.textContent = "Listening... screen stays awake";
+    loop();
+  } catch (e) {
+    btn.textContent = "Start Voice Counting";
+    lg.textContent = "Mic error: " + e.message;
+  }
+  busy = false;
+};
+
+document.getElementById("cal").onclick = function() {
+  if (!run) return alert("Tap Start Voice Counting first.");
+  samples = new Array();
+  cal = true;
+  sEl.textContent = "Calibrating...";
+  setTimeout(function() {
+    cal = false;
+    if (samples.length > 0) {
+      var peak = Math.max.apply(null, samples);
+      r1.value = Math.min(75, Math.max(8, peak + 4));
+      upd();
+      lg.textContent = "Calibrated threshold to " + r1.value;
+    }
+    sEl.textContent = "Listening";
+  }, 2000);
+};
+
+function loop() {
+  if (!run) return;
+  var d = new Uint8Array(an.frequencyBinCount);
+  an.getByteTimeDomainData(d);
+  var sq = 0;
+  for (var i = 0; i < d.length; i++) {
+    var n = (d[i] - 128) / 128;
+    sq += n * n;
+  }
+  var raw = Math.min(100, Math.round(Math.sqrt(sq / d.length) * 800));
+  smoothLv = raw > smoothLv ? raw : smoothLv * 0.85;
+  var lv = Math.round(smoothLv);
+  fl.style.width = lv + "%";
+  if (cal) samples.push(lv);
+
+  var th = Number(r1.value), mn = Number(r2.value), mx = Number(r3.value), ps = Number(r4.value);
+  var now = Date.now();
+
+  if (lv >= th) {
+    if (!ch) { ch = true; t0 = now; actF = 0; totF = 0; }
+    tLast = now;
+    actF++;
+  }
+  if (ch) {
+    totF++;
+    var gap = (now - tLast) / 1000, dur = (tLast - t0) / 1000;
+    sEl.textContent = dur > mx ? "Too Long" : "Chanting...";
+    tEl.textContent = "Chant: " + dur.toFixed(1) + "s | Pause: " + gap.toFixed(1) + "s";
+    if (gap >= ps) {
+      var dens = actF / Math.max(1, totF);
+      if (dur >= mn && dur <= mx && dens >= 0.45) {
+        addOne();
+        lg.textContent = "Counted +1 (" + dur.toFixed(1) + "s)";
+      } else {
+        lg.textContent = "Skipped (" + dur.toFixed(1) + "s)";
+      }
+      ch = false;
+      sEl.textContent = "Listening";
+      tEl.textContent = "Chant: 0.0s | Pause: 0.0s";
+    }
+  }
+  raf = requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>
