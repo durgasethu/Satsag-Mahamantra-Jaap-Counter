@@ -162,24 +162,22 @@ function updateCalPrompt() {
 
 function analyzeCalRound(frames, noiseFloor) {
   if (!frames || frames.length === 0) return null;
-  var sortedLv = frames.map(function(f) { return f.lv; }).sort(function(a, b) { return a - b; });
+  var endCutoff = frames[frames.length - 1].t - 0.35;
+  var trimmed = frames.filter(function(f) { return f.t <= endCutoff; });
+  if (trimmed.length === 0) trimmed = frames;
+
+  var sortedLv = trimmed.map(function(f) { return f.lv; }).sort(function(a, b) { return a - b; });
   var p75 = sortedLv[Math.floor(sortedLv.length * 0.75)] || 0;
   var activeThr = Math.max(noiseFloor + 5, p75 * 0.45, 6);
 
   var firstT = null, lastT = null;
-  var maxPause = 0, prevVoiceT = null;
   var activeLevels = new Array();
   var activeSpecs = new Array();
 
-  for (var i = 0; i < frames.length; i++) {
-    var f = frames[i];
+  for (var i = 0; i < trimmed.length; i++) {
+    var f = trimmed[i];
     if (f.lv >= activeThr) {
       if (firstT === null) firstT = f.t;
-      if (prevVoiceT !== null) {
-        var gap = f.t - prevVoiceT;
-        if (gap > maxPause) maxPause = gap;
-      }
-      prevVoiceT = f.t;
       lastT = f.t;
       activeLevels.push(f.lv);
       activeSpecs.push(f.spec);
@@ -193,7 +191,6 @@ function analyzeCalRound(frames, noiseFloor) {
   var avgVoice = activeLevels.reduce(function(s, v) { return s + v; }, 0) / activeLevels.length;
   return {
     dur: dur,
-    maxPause: maxPause,
     voiceLv: avgVoice,
     spec: avgSpec(activeSpecs)
   };
@@ -207,14 +204,14 @@ function finishCalibration() {
   }
 
   var avgVoiceLv = calRounds.reduce(function(s, r) { return s + r.voiceLv; }, 0) / calRounds.length;
+  var avgDur = calRounds.reduce(function(s, r) { return s + r.dur; }, 0) / calRounds.length;
   var minDur = Math.min.apply(null, calRounds.map(function(r) { return r.dur; }));
   var maxDur = Math.max.apply(null, calRounds.map(function(r) { return r.dur; }));
-  var longestPause = Math.max.apply(null, calRounds.map(function(r) { return r.maxPause; }));
 
   var newThr = Math.round(Math.min(65, Math.max(6, noiseFloor + (avgVoiceLv - noiseFloor) * 0.35)));
   var newMinM = Number(Math.max(2.0, minDur * 0.78).toFixed(1));
   var newMaxM = Number(Math.min(22.0, Math.max(9.0, maxDur * 1.45)).toFixed(1));
-  var newPause = Number(Math.min(4.0, Math.max(0.8, longestPause * 1.35 + 0.3)).toFixed(1));
+  var newPause = Number(Math.min(2.5, Math.max(0.6, avgDur * 0.18)).toFixed(1));
 
   var r0 = calRounds.at(0);
   var r1 = calRounds.at(1);
@@ -246,7 +243,7 @@ function finishCalibration() {
   calBox.classList.remove("show");
   calBtn.classList.remove("active");
   applyCalUI();
-  lg.textContent = "Calibration complete! Counts preserved. Ready to count.";
+  lg.textContent = "Calibrated (" + avgDur.toFixed(1) + "s chant -> " + newPause.toFixed(1) + "s pause). Ready!";
 }
 
 function cancelCalibration() {
@@ -307,12 +304,13 @@ calNextBtn.onclick = function() {
     finishCalibration();
   } else {
     updateCalPrompt();
-lg.textContent = "Round " + calRounds.length + " saved (" + parsed.dur.toFixed(1) + "s). Chant Round " + (calRounds.length + 1) + "...";
-}
+    lg.textContent = "Round " + calRounds.length + " saved (" + parsed.dur.toFixed(1) + "s). Chant Round " + (calRounds.length + 1) + "...";
+  }
 };
+
 calCancelBtn.onclick = function() {
-cancelCalibration();
-lg.textContent = "Calibration canceled.";
+  cancelCalibration();
+  lg.textContent = "Calibration canceled.";
 };
 var clrCalBtn = document.getElementById("clrCal");
 var clrConfirm = false;
@@ -553,4 +551,4 @@ lg.textContent = "Stopped.";
 await startAudio();
 }
 };
-lg.textContent = "v24 Android Ready. Tap Start Voice Counting or Calibrate.";
+lg.textContent = "v25 Android Ready. Tap Start Voice Counting or Calibrate.";
