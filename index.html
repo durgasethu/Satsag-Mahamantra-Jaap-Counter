@@ -47,7 +47,7 @@ button{border:none;border-radius:12px;padding:14px;font-size:1rem;font-weight:60
   <div class="card">
     <div class="row"><span id="tEl">Chant: 0.0s | Pause: 0.0s</span><span id="sEl">Idle</span></div>
     <div class="bar"><div class="mark" id="mk" style="left:18%"></div><div class="fill" id="fl"></div></div>
-    <div class="log" id="lg">Ready. Tap Start Voice Counting or Calibrate.</div>
+    <div class="log" id="lg">Loading v26...</div>
     <div class="heard" id="hd"></div>
   </div>
   <div class="cal-box" id="calBox">
@@ -70,9 +70,13 @@ button{border:none;border-radius:12px;padding:14px;font-size:1rem;font-weight:60
   </div>
 </div>
 <script>
+  window.onerror = function(msg) {
+    var el = document.getElementById("lg");
+    if (el) el.textContent = "Error: " + msg;
+  };
   var isAndroid = /Android/i.test(navigator.userAgent);
   var s = document.createElement("script");
-  s.src = isAndroid ? "app-android.js?v=25" : "app-ios.js?v=25";
+  s.src = isAndroid ? "app-android.js?v=26" : "app-ios.js?v=26";
   document.body.appendChild(s);
 </script>
 </body>
