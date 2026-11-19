@@ -236,7 +236,10 @@ btn.onclick = async function() {
       if (ch && (pau >= pauseMax || (now - t0) >= maxM)) {
         ch = false;
         var ratio = totF > 0 ? (actF / totF) : 0;
-        if (dur >= minM && ratio > 0.35) {
+        var minReq = isTrn ? Math.min(minM, 2.5) : minM;
+        var ratioReq = isTrn ? 0.25 : 0.35;
+
+        if (dur >= minReq && ratio > ratioReq && curSpecs.length > 0) {
           var roundSpec = avgSpec(curSpecs);
           if (isTrn) {
             trnList.push(roundSpec);
@@ -248,7 +251,7 @@ btn.onclick = async function() {
               lg.textContent = "Voiceprint saved! Ready to count.";
             } else {
               updTrn();
-              lg.textContent = "Round " + trnList.length + " captured. Chant Round " + (trnList.length + 1) + " of 3...";
+              lg.textContent = "Round " + trnList.length + " captured! Chant Round " + (trnList.length + 1) + " of 3...";
             }
           } else if (vp) {
             var score = sim(roundSpec, vp);
@@ -263,7 +266,11 @@ btn.onclick = async function() {
             lg.textContent = "Counted (" + dur.toFixed(1) + "s)";
           }
         } else {
-          lg.textContent = "Short sound ignored (" + dur.toFixed(1) + "s)";
+          if (isTrn) {
+            lg.textContent = "Round " + (trnList.length + 1) + " too short (" + dur.toFixed(1) + "s). Try again.";
+          } else {
+            lg.textContent = "Short sound ignored (" + dur.toFixed(1) + "s)";
+          }
         }
       }
     }
