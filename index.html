@@ -89,7 +89,8 @@ document.getElementById("tap").onclick = function() { addOne(); lg.textContent =
 document.getElementById("rst").onclick = function() { st = { b: 0, m: 0 }; draw(); lg.textContent = "Reset to 0"; };
 
 var run = false, stream = null, ctx = null, an = null, raf = null, wakeLock = null;
-var ch = false, t0 = 0, tLast = 0, cal = false, smoothLv = 0, actF = 0, totF = 0, samples = [];
+var ch = false, t0 = 0, tLast = 0, cal = false, smoothLv = 0, actF = 0, totF = 0;
+var samples = new Array();
 var btn = document.getElementById("btn"), sEl = document.getElementById("sEl"), tEl = document.getElementById("tEl"), fl = document.getElementById("fl");
 
 async function keepAwake() {
@@ -97,6 +98,10 @@ async function keepAwake() {
     if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen");
   } catch (e) {}
 }
+
+document.addEventListener("visibilitychange", function() {
+  if (run && document.visibilityState === "visible") keepAwake();
+});
 
 btn.onclick = async function() {
   if (run) {
@@ -128,11 +133,11 @@ btn.onclick = async function() {
 
     run = true;
     smoothLv = 0;
-    keepAwake();
+    await keepAwake();
     btn.textContent = "Stop Listening";
     btn.classList.add("on");
     sEl.textContent = "Listening";
-    lg.textContent = "Listening on iPhone...";
+    lg.textContent = "Listening (screen stays awake)...";
     loop();
   } catch (e) {
     alert("Mic error: " + e.message);
@@ -141,7 +146,7 @@ btn.onclick = async function() {
 
 document.getElementById("cal").onclick = function() {
   if (!run) return alert("Tap Start Voice Counting first.");
-  samples = [];
+  samples = new Array();
   cal = true;
   sEl.textContent = "Calibrating...";
   setTimeout(function() {
