@@ -52,6 +52,8 @@ input[type=range] { width: 100%; accent-color: #f59e0b; }
     <button class="sec" id="rst" style="width:100%;margin-top:10px;padding:10px;font-size:0.85rem">Reset Today</button>
   </div>
 </div>
+<canvas id="cv" width="2" height="2" style="position:fixed;opacity:0.01;pointer-events:none"></canvas>
+<video id="vid" playsinline muted loop style="position:fixed;width:2px;height:2px;opacity:0.01;pointer-events:none"></video>
 <script>
 var key = "jaap_v3_" + new Date().toISOString().slice(0, 10);
 var st = { b: 0, m: 0 };
@@ -92,16 +94,25 @@ var run = false, stream = null, ctx = null, an = null, raf = null, wakeLock = nu
 var ch = false, t0 = 0, tLast = 0, cal = false, smoothLv = 0, actF = 0, totF = 0;
 var samples = new Array();
 var btn = document.getElementById("btn"), sEl = document.getElementById("sEl"), tEl = document.getElementById("tEl"), fl = document.getElementById("fl");
+var vid = document.getElementById("vid"), cv = document.getElementById("cv");
 
 async function keepAwake() {
   try {
     if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen");
   } catch (e) {}
+  try {
+    var c2d = cv.getContext("2d");
+    c2d.fillStyle = "#000";
+    c2d.fillRect(0, 0, 2, 2);
+    vid.srcObject = cv.captureStream(1);
+    await vid.play();
+  } catch (e) {}
 }
 
-document.addEventListener("visibilitychange", function() {
-  if (run && document.visibilityState === "visible") keepAwake();
-});
+function releaseAwake() {
+  try { if (wakeLock) { wakeLock.release(); wakeLock = null; } } catch (e) {}
+  try { vid.pause(); vid.srcObject = null; } catch (e) {}
+}
 
 btn.onclick = async function() {
   if (run) {
@@ -109,7 +120,7 @@ btn.onclick = async function() {
     if (raf) cancelAnimationFrame(raf);
     if (stream) stream.getTracks().forEach(function(t) { t.stop(); });
     if (ctx) { try { ctx.close(); } catch (e) {} ctx = null; }
-    if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
+    releaseAwake();
     btn.textContent = "Start Voice Counting";
     btn.classList.remove("on");
     sEl.textContent = "Idle";
@@ -137,7 +148,7 @@ btn.onclick = async function() {
     btn.textContent = "Stop Listening";
     btn.classList.add("on");
     sEl.textContent = "Listening";
-    lg.textContent = "Listening (screen stays awake)...";
+    lg.textContent = "Listening (video wake-lock active)...";
     loop();
   } catch (e) {
     alert("Mic error: " + e.message);
