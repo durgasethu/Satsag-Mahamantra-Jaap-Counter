@@ -5,7 +5,7 @@ var calKey = "jaap_cal_ios_v1";
 var st = { b: 0, m: 0 };
 var vp = null;
 var defaultCal = { thr: 18, minM: 3.8, maxM: 10.5, pauseMax: 1.2, strict: 0.75, calibrated: false };
-var cal = Object.assign({}, defaultCal);
+var cal = { thr: 18, minM: 3.8, maxM: 10.5, pauseMax: 1.2, strict: 0.75, calibrated: false };
 
 try {
   var sv = JSON.parse(localStorage.getItem(key));
@@ -14,7 +14,14 @@ try {
   var svp = JSON.parse(localStorage.getItem(vpKey));
   if (svp && svp.length === 32) vp = svp;
   var scal = JSON.parse(localStorage.getItem(calKey));
-  if (scal && typeof scal.thr === "number") cal = Object.assign({}, defaultCal, scal);
+  if (scal && typeof scal.thr === "number") {
+    cal.thr = Number(scal.thr) || 18;
+    cal.minM = Number(scal.minM) || 3.8;
+    cal.maxM = Number(scal.maxM) || 10.5;
+    cal.pauseMax = Number(scal.pauseMax) || 1.2;
+    cal.strict = Number(scal.strict) || 0.75;
+    cal.calibrated = Boolean(scal.calibrated);
+  }
 } catch (e) {}
 
 var bEl = document.getElementById("bEl");
@@ -78,9 +85,7 @@ rstBtn.onclick = function() {
     rstConfirm = false;
     rstBtn.textContent = "Reset All Counts";
     rstBtn.classList.remove("confirming");
-    try {
-      localStorage.removeItem(key);
-    } catch (e) {}
+    try { localStorage.removeItem(key); } catch (e) {}
     st = { b: 0, m: 0 };
     draw();
     lg.textContent = "All counts reset to 0.";
@@ -89,12 +94,12 @@ rstBtn.onclick = function() {
 
 var run = false, busy = false, stream = null, ctx = null, an = null, timer = null, wakeLock = null;
 var ch = false, t0 = 0, tLast = 0, smoothLv = 0, actF = 0, totF = 0;
-var curSpecs = new Array();
+var curSpecs = [];
 
 var isCal = false;
-var calRounds = new Array();
-var calNoiseSamples = new Array();
-var calRoundFrames = new Array();
+var calRounds = [];
+var calNoiseSamples = [];
+var calRoundFrames = [];
 var calRoundStart = 0;
 
 var btn = document.getElementById("btn");
@@ -107,7 +112,7 @@ function norm(v) {
   for (var i = 0; i < v.length; i++) m += v[i] * v[i];
   m = Math.sqrt(m);
   if (m === 0) return v;
-  var o = new Array();
+  var o = [];
   for (var j = 0; j < v.length; j++) o.push(v[j] / m);
   return o;
 }
@@ -123,7 +128,7 @@ function sim(a, b) {
 }
 
 function avgSpec(list) {
-  var a = new Array();
+  var a = [];
   for (var x = 0; x < 32; x++) a.push(0);
   if (list.length === 0) return a;
   for (var i = 0; i < list.length; i++) {
@@ -159,8 +164,8 @@ function analyzeCalRound(frames, noiseFloor) {
   var activeThr = Math.max(noiseFloor + 5, p75 * 0.45, 6);
 
   var firstT = null, lastT = null;
-  var activeLevels = new Array();
-  var activeSpecs = new Array();
+  var activeLevels = [];
+  var activeSpecs = [];
 
   for (var i = 0; i < trimmed.length; i++) {
     var f = trimmed[i];
@@ -201,12 +206,9 @@ function finishCalibration() {
   var newMaxM = Number(Math.min(20.0, Math.max(8.0, maxDur * 1.45)).toFixed(1));
   var newPause = Number(Math.min(2.5, Math.max(0.6, avgDur * 0.18)).toFixed(1));
 
-  var r0 = calRounds.at(0);
-  var r1 = calRounds.at(1);
-  var r2 = calRounds.at(2);
-  var s01 = sim(r0.spec, r1.spec);
-  var s12 = sim(r1.spec, r2.spec);
-  var s02 = sim(r0.spec, r2.spec);
+  var s01 = sim(calRounds[0].spec, calRounds[1].spec);
+  var s12 = sim(calRounds[1].spec, calRounds[2].spec);
+  var s02 = sim(calRounds[0].spec, calRounds[2].spec);
   var minSim = Math.min(s01, s12, s02);
   var newStrict = Number(Math.min(0.85, Math.max(0.58, minSim - 0.08)).toFixed(2));
 
@@ -235,8 +237,8 @@ function finishCalibration() {
 
 function cancelCalibration() {
   isCal = false;
-  calRounds = new Array();
-  calRoundFrames = new Array();
+  calRounds = [];
+  calRoundFrames = [];
   ch = false;
   calBox.classList.remove("show");
   calBtn.classList.remove("active");
@@ -244,6 +246,7 @@ function cancelCalibration() {
 }
 
 calBtn.onclick = async function() {
+  if (ctx && ctx.state === "suspended") { try { ctx.resume(); } catch (e) {} }
   if (isCal) {
     cancelCalibration();
     lg.textContent = "Calibration canceled.";
@@ -255,9 +258,9 @@ calBtn.onclick = async function() {
   }
   isCal = true;
   ch = false;
-  calRounds = new Array();
-  calNoiseSamples = new Array();
-  calRoundFrames = new Array();
+  calRounds = [];
+  calNoiseSamples = [];
+  calRoundFrames = [];
   calRoundStart = performance.now() / 1000;
   calBtn.classList.add("active");
   calBtn.textContent = "Calibrating (3 Rounds)...";
@@ -267,6 +270,7 @@ calBtn.onclick = async function() {
 };
 
 calNextBtn.onclick = function() {
+  if (ctx && ctx.state === "suspended") { try { ctx.resume(); } catch (e) {} }
   if (!isCal) return;
   var noiseFloor = 4;
   if (calNoiseSamples.length > 0) {
@@ -276,12 +280,12 @@ calNextBtn.onclick = function() {
   var parsed = analyzeCalRound(calRoundFrames, noiseFloor);
   if (!parsed) {
     lg.textContent = "Could not hear full chant. Please chant the mantra once, then tap button.";
-    calRoundFrames = new Array();
+    calRoundFrames = [];
     calRoundStart = performance.now() / 1000;
     return;
   }
   calRounds.push(parsed);
-  calRoundFrames = new Array();
+  calRoundFrames = [];
   calRoundStart = performance.now() / 1000;
 
   if (calRounds.length >= 3) {
@@ -306,20 +310,19 @@ clrCalBtn.onclick = function() {
     lg.textContent = "Already using default settings.";
     return;
   }
-  if (!clrConfirm) {
-    clrConfirm = true;
-    clrCalBtn.textContent = "Tap Again to Clear";
-    clrTimer = setTimeout(function() {
-      clrConfirm = false;
-      clrCalBtn.textContent = "Clear Calibration";
-    }, 4000);
-  } else {
-    clearTimeout(clrTimer);
-Use code with caution.
+if (!clrConfirm) {
+clrConfirm = true;
+clrCalBtn.textContent = "Tap Again to Clear";
+clrTimer = setTimeout(function() {
+clrConfirm = false;
+clrCalBtn.textContent = "Clear Calibration";
+}, 4000);
+} else {
+clearTimeout(clrTimer);
 clrConfirm = false;
 clrCalBtn.textContent = "Clear Calibration";
 vp = null;
-cal = Object.assign({}, defaultCal);
+cal = { thr: 18, minM: 3.8, maxM: 10.5, pauseMax: 1.2, strict: 0.75, calibrated: false };
 cancelCalibration();
 try {
 localStorage.removeItem(vpKey);
@@ -338,11 +341,12 @@ wakeLock = await navigator.wakeLock.request("screen");
 }
 function stopAudio() {
 run = false;
+busy = false;
 ch = false;
 if (isCal) cancelCalibration();
 if (timer) { clearInterval(timer); timer = null; }
 if (stream) {
-stream.getTracks().forEach(function(t) { t.stop(); });
+try { stream.getTracks().forEach(function(t) { t.stop(); }); } catch (e) {}
 stream = null;
 }
 if (ctx) {
@@ -361,15 +365,17 @@ fl.style.width = "0%";
 async function startAudio() {
 if (busy) return;
 busy = true;
+lg.textContent = "Requesting microphone...";
+var unlockGuard = setTimeout(function() { busy = false; }, 6000);
 try {
 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-throw new Error("Mic requires HTTPS or localhost on iPhone");
+throw new Error("Mic requires HTTPS on iPhone");
 }
 var AudioCtx = window.AudioContext || window.webkitAudioContext;
 ctx = new AudioCtx();
-if (ctx.state === "suspended") ctx.resume();
+if (ctx.state === "suspended") { try { ctx.resume(); } catch (e) {} }
 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-if (ctx.state === "suspended") await ctx.resume();
+if (ctx.state === "suspended") { try { ctx.resume(); } catch (e) {} }
 var src = ctx.createMediaStreamSource(stream);
 an = ctx.createAnalyser();
 an.fftSize = 512;
@@ -388,7 +394,6 @@ lg.textContent = "Listening... Begin chanting.";
 keepAwake();
 timer = setInterval(function() {
 if (!run || !an) return;
-if (ctx && ctx.state === "suspended") ctx.resume();
 an.getByteTimeDomainData(timeData);
 an.getByteFrequencyData(freqData);
 var sum = 0;
@@ -400,7 +405,7 @@ var rms = Math.sqrt(sum / timeData.length) * 400;
 smoothLv = smoothLv * 0.6 + rms * 0.4;
 fl.style.width = Math.min(100, smoothLv) + "%";
 var now = performance.now() / 1000;
-var spec = new Array();
+var spec = [];
 for (var b = 0; b < 32; b++) {
 var bSum = 0;
 for (var k = 0; k < 4; k++) bSum += freqData[b * 4 + k] || 0;
@@ -410,7 +415,9 @@ if (isCal) {
 if ((now - calRoundStart) < 0.45 && calRounds.length === 0) {
 calNoiseSamples.push(smoothLv);
 }
+if (calRoundFrames.length < 900) {
 calRoundFrames.push({ t: now, lv: smoothLv, spec: norm(spec) });
+}
 sEl.textContent = "Calibrating (" + (calRounds.length + 1) + "/3)";
 tEl.textContent = "Round " + (calRounds.length + 1) + " elapsed: " + (now - calRoundStart).toFixed(1) + "s";
 return;
@@ -426,7 +433,7 @@ ch = true;
 t0 = now;
 actF = 0;
 totF = 0;
-curSpecs = new Array();
+curSpecs = [];
 }
 tLast = now;
 actF++;
@@ -468,6 +475,7 @@ lg.textContent = "Short sound ignored (" + dur.toFixed(1) + "s)";
 stopAudio();
 lg.textContent = "Mic error: " + (err.message || "Permission denied");
 } finally {
+clearTimeout(unlockGuard);
 busy = false;
 }
 }
@@ -479,4 +487,4 @@ lg.textContent = "Stopped.";
 await startAudio();
 }
 };
-lg.textContent = "v25 iOS Ready. Tap Start Voice Counting or Calibrate.";
+lg.textContent = "v26 iOS Ready. Tap Start Voice Counting or Calibrate.";
