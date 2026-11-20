@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" type="image/png" href="icon.png">
 <meta name="theme-color" content="#12100e">
 <meta name="apple-mobile-web-app-title" content="Jaap Counter">
 <title>Mahamantra Jaap Counter</title>
@@ -28,6 +30,14 @@ button{border:none;border-radius:12px;padding:14px;font-size:1rem;font-weight:60
 .sec{background:#2e2822;color:#f8fafc}
 .cal{background:#1d4ed8;color:#fff;grid-column:span 2}
 .cal.active{background:#7c3aed;color:#fff}
+.inst-card{background:#064e3b;border:1px solid #10b981;border-radius:14px;padding:14px;text-align:center;color:#ecfdf5;display:none;flex-direction:column;gap:10px}
+.inst-card.show{display:flex}
+.inst-q{font-size:.98rem;font-weight:600;line-height:1.4}
+.inst-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.inst-yes{background:#10b981;color:#052e16;padding:11px;font-size:.92rem}
+.inst-no{background:#065f46;color:#d1fae5;padding:11px;font-size:.92rem}
+.inst-steps{text-align:left;font-size:.86rem;line-height:1.5;background:#022c22;padding:10px 12px;border-radius:10px;display:none}
+.inst-steps.show{display:block}
 .cal-box{background:#172033;border:1px solid #3b82f6;border-radius:14px;padding:14px;text-align:center;display:none;flex-direction:column;gap:10px}
 .cal-box.show{display:flex}
 .cal-step{font-size:.8rem;color:#93c5fd;font-weight:700;text-transform:uppercase}
@@ -36,12 +46,21 @@ button{border:none;border-radius:12px;padding:14px;font-size:1rem;font-weight:60
 .cal-next{background:#10b981;color:#052e16}
 .cal-cancel{background:#334155;color:#f8fafc}
 .cal-summary{font-size:.78rem;color:#94a3b8;margin-top:4px}
-.danger{background:#450a0a;color:#fca5a5;width:100%;padding:12px;font-size:.9rem}
+.edit-btn{background:#2e2822;color:#fde68a;width:100%;padding:12px;font-size:.9rem;margin-top:10px}
+.danger{background:#450a0a;color:#fca5a5;width:100%;padding:12px;font-size:.9rem;margin-top:8px}
 .danger.confirming{background:#dc2626;color:#fff}
 </style>
 </head>
 <body>
 <div class="box">
+  <div class="inst-card" id="instCard">
+    <div class="inst-q">Do you want to add the app to the homescreen?</div>
+    <div class="inst-btns" id="instBtns">
+      <button class="inst-yes" id="instYes">Yes</button>
+      <button class="inst-no" id="instNo">No</button>
+    </div>
+    <div class="inst-steps" id="instSteps"></div>
+  </div>
   <div class="card mantra">Hare Rama Hare Rama Rama Rama Hare Hare<br>Hare Krishna Hare Krishna Krishna Krishna Hare Hare</div>
   <div class="grid">
     <div class="card"><div class="lbl">Current Count (108)</div><div class="val" id="bEl">0</div></div>
@@ -50,7 +69,7 @@ button{border:none;border-radius:12px;padding:14px;font-size:1rem;font-weight:60
   <div class="card">
     <div class="row"><span id="tEl">Chant: 0.0s | Pause: 0.0s</span><span id="sEl">Idle</span></div>
     <div class="bar"><div class="mark" id="mk" style="left:18%"></div><div class="fill" id="fl"></div></div>
-    <div class="log" id="lg">Loading v26...</div>
+    <div class="log" id="lg">Loading v29...</div>
     <div class="heard" id="hd"></div>
   </div>
   <div class="cal-box" id="calBox">
@@ -69,7 +88,8 @@ button{border:none;border-radius:12px;padding:14px;font-size:1rem;font-weight:60
   </div>
   <div class="card">
     <div class="cal-summary" id="calInfo">Using default voice &amp; pace settings. Tap Calibrate to personalize.</div>
-    <button class="danger" id="rstAll" style="margin-top:10px">Reset All Counts</button>
+    <button class="edit-btn" id="editCnt">Set / Restore Counts</button>
+    <button class="danger" id="rstAll">Reset All Counts</button>
   </div>
 </div>
 <script>
@@ -77,9 +97,12 @@ button{border:none;border-radius:12px;padding:14px;font-size:1rem;font-weight:60
     var el = document.getElementById("lg");
     if (el) el.textContent = "Error: " + msg;
   };
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").catch(function() {});
+  }
   var isAndroid = /Android/i.test(navigator.userAgent);
   var s = document.createElement("script");
-  s.src = isAndroid ? "app-android.js?v=26" : "app-ios.js?v=26";
+  s.src = isAndroid ? "app-android.js?v=29" : "app-ios.js?v=29";
   document.body.appendChild(s);
 </script>
 </body>
