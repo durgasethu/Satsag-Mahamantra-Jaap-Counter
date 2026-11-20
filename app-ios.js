@@ -4,7 +4,6 @@ var calKey = "jaap_cal_ios_v1";
 
 var st = { b: 0, m: 0 };
 var vp = null;
-var defaultCal = { thr: 18, minM: 3.8, maxM: 10.5, pauseMax: 1.2, strict: 0.75, calibrated: false };
 var cal = { thr: 18, minM: 3.8, maxM: 10.5, pauseMax: 1.2, strict: 0.75, calibrated: false };
 
 try {
@@ -23,6 +22,29 @@ try {
     cal.calibrated = Boolean(scal.calibrated);
   }
 } catch (e) {}
+
+// Home Screen prompt for iPhone
+var instCard = document.getElementById("instCard");
+var instBtns = document.getElementById("instBtns");
+var instYes = document.getElementById("instYes");
+var instNo = document.getElementById("instNo");
+var instSteps = document.getElementById("instSteps");
+var isStandalone = window.navigator.standalone === true || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+
+if (!isStandalone && instCard) {
+  instCard.classList.add("show");
+  instYes.onclick = function() {
+    instBtns.style.display = "none";
+    instSteps.innerHTML = "1. Tap the <strong>Share</strong> icon (square with upward arrow) in your browser bar.<br>2. Scroll down and tap <strong>Add to Home Screen</strong>, then tap <strong>Add</strong>.<br><button class='inst-no' id='instDone' style='width:100%;margin-top:8px'>Got It</button>";
+    instSteps.classList.add("show");
+    document.getElementById("instDone").onclick = function() {
+      instCard.classList.remove("show");
+    };
+  };
+  instNo.onclick = function() {
+    instCard.classList.remove("show");
+  };
+}
 
 var bEl = document.getElementById("bEl");
 var mEl = document.getElementById("mEl");
@@ -66,6 +88,23 @@ document.getElementById("tap").onclick = function() {
   lg.textContent = "Manual +1 added";
 };
 
+document.getElementById("editCnt").onclick = function() {
+  var newB = prompt("Enter Current Count (0 to 107):", String(st.b));
+  if (newB === null) return;
+  var newM = prompt("Enter Completed Malas:", String(st.m));
+  if (newM === null) return;
+  var bNum = parseInt(newB, 10);
+  var mNum = parseInt(newM, 10);
+  if (isNaN(bNum) || bNum < 0 || isNaN(mNum) || mNum < 0) {
+    lg.textContent = "Invalid numbers entered.";
+    return;
+  }
+  st.m = mNum + Math.floor(bNum / 108);
+  st.b = bNum % 108;
+  draw();
+  lg.textContent = "Counts restored: " + st.b + " count, " + st.m + " malas.";
+};
+
 var rstBtn = document.getElementById("rstAll");
 var rstConfirm = false;
 var rstTimer = null;
@@ -94,12 +133,12 @@ rstBtn.onclick = function() {
 
 var run = false, busy = false, stream = null, ctx = null, an = null, timer = null, wakeLock = null;
 var ch = false, t0 = 0, tLast = 0, smoothLv = 0, actF = 0, totF = 0;
-var curSpecs = [];
+var curSpecs = new Array();
 
 var isCal = false;
-var calRounds = [];
-var calNoiseSamples = [];
-var calRoundFrames = [];
+var calRounds = new Array();
+var calNoiseSamples = new Array();
+var calRoundFrames = new Array();
 var calRoundStart = 0;
 
 var btn = document.getElementById("btn");
@@ -112,7 +151,7 @@ function norm(v) {
   for (var i = 0; i < v.length; i++) m += v[i] * v[i];
   m = Math.sqrt(m);
   if (m === 0) return v;
-  var o = [];
+  var o = new Array();
   for (var j = 0; j < v.length; j++) o.push(v[j] / m);
   return o;
 }
@@ -128,7 +167,7 @@ function sim(a, b) {
 }
 
 function avgSpec(list) {
-  var a = [];
+  var a = new Array();
   for (var x = 0; x < 32; x++) a.push(0);
   if (list.length === 0) return a;
   for (var i = 0; i < list.length; i++) {
@@ -155,20 +194,20 @@ function updateCalPrompt() {
 
 function analyzeCalRound(frames, noiseFloor) {
   if (!frames || frames.length === 0) return null;
-  var endCutoff = frames[frames.length - 1].t - 0.35;
+  var endCutoff = frames.at(-1).t - 0.35;
   var trimmed = frames.filter(function(f) { return f.t <= endCutoff; });
   if (trimmed.length === 0) trimmed = frames;
 
   var sortedLv = trimmed.map(function(f) { return f.lv; }).sort(function(a, b) { return a - b; });
-  var p75 = sortedLv[Math.floor(sortedLv.length * 0.75)] || 0;
+  var p75 = sortedLv.at(Math.floor(sortedLv.length * 0.75)) || 0;
   var activeThr = Math.max(noiseFloor + 5, p75 * 0.45, 6);
 
   var firstT = null, lastT = null;
-  var activeLevels = [];
-  var activeSpecs = [];
+  var activeLevels = new Array();
+  var activeSpecs = new Array();
 
   for (var i = 0; i < trimmed.length; i++) {
-    var f = trimmed[i];
+    var f = trimmed.at(i);
     if (f.lv >= activeThr) {
       if (firstT === null) firstT = f.t;
       lastT = f.t;
@@ -193,7 +232,7 @@ function finishCalibration() {
   var noiseFloor = 4;
   if (calNoiseSamples.length > 0) {
     var sNoise = calNoiseSamples.slice().sort(function(a, b) { return a - b; });
-    noiseFloor = sNoise[Math.floor(sNoise.length * 0.5)];
+    noiseFloor = sNoise.at(Math.floor(sNoise.length * 0.5));
   }
 
   var avgVoiceLv = calRounds.reduce(function(s, r) { return s + r.voiceLv; }, 0) / calRounds.length;
@@ -206,9 +245,12 @@ function finishCalibration() {
   var newMaxM = Number(Math.min(20.0, Math.max(8.0, maxDur * 1.45)).toFixed(1));
   var newPause = Number(Math.min(2.5, Math.max(0.6, avgDur * 0.18)).toFixed(1));
 
-  var s01 = sim(calRounds[0].spec, calRounds[1].spec);
-  var s12 = sim(calRounds[1].spec, calRounds[2].spec);
-  var s02 = sim(calRounds[0].spec, calRounds[2].spec);
+  var r0 = calRounds.at(0);
+  var r1 = calRounds.at(1);
+  var r2 = calRounds.at(2);
+  var s01 = sim(r0.spec, r1.spec);
+  var s12 = sim(r1.spec, r2.spec);
+  var s02 = sim(r0.spec, r2.spec);
   var minSim = Math.min(s01, s12, s02);
   var newStrict = Number(Math.min(0.85, Math.max(0.58, minSim - 0.08)).toFixed(2));
 
@@ -237,8 +279,8 @@ function finishCalibration() {
 
 function cancelCalibration() {
   isCal = false;
-  calRounds = [];
-  calRoundFrames = [];
+  calRounds = new Array();
+  calRoundFrames = new Array();
   ch = false;
   calBox.classList.remove("show");
   calBtn.classList.remove("active");
@@ -250,66 +292,61 @@ calBtn.onclick = async function() {
   if (isCal) {
     cancelCalibration();
     lg.textContent = "Calibration canceled.";
-    return;
-  }
-  if (!run) {
-    await startAudio();
-    if (!run) return;
-  }
-  isCal = true;
-  ch = false;
-  calRounds = [];
-  calNoiseSamples = [];
-  calRoundFrames = [];
-  calRoundStart = performance.now() / 1000;
-  calBtn.classList.add("active");
-  calBtn.textContent = "Calibrating (3 Rounds)...";
-  calBox.classList.add("show");
-  updateCalPrompt();
-  lg.textContent = "Calibrating Round 1 of 3... Chant now.";
+return;
+}
+if (!run) {
+await startAudio();
+if (!run) return;
+}
+isCal = true;
+ch = false;
+calRounds = new Array();
+calNoiseSamples = new Array();
+calRoundFrames = new Array();
+calRoundStart = performance.now() / 1000;
+calBtn.classList.add("active");
+calBtn.textContent = "Calibrating (3 Rounds)...";
+calBox.classList.add("show");
+updateCalPrompt();
+lg.textContent = "Calibrating Round 1 of 3... Chant now.";
 };
-
 calNextBtn.onclick = function() {
-  if (ctx && ctx.state === "suspended") { try { ctx.resume(); } catch (e) {} }
-  if (!isCal) return;
-  var noiseFloor = 4;
-  if (calNoiseSamples.length > 0) {
-    var sNoise = calNoiseSamples.slice().sort(function(a, b) { return a - b; });
-    noiseFloor = sNoise[Math.floor(sNoise.length * 0.5)];
-  }
-  var parsed = analyzeCalRound(calRoundFrames, noiseFloor);
-  if (!parsed) {
-    lg.textContent = "Could not hear full chant. Please chant the mantra once, then tap button.";
-    calRoundFrames = [];
-    calRoundStart = performance.now() / 1000;
-    return;
-  }
-  calRounds.push(parsed);
-  calRoundFrames = [];
-  calRoundStart = performance.now() / 1000;
-
-  if (calRounds.length >= 3) {
-    finishCalibration();
-  } else {
-    updateCalPrompt();
-    lg.textContent = "Round " + calRounds.length + " saved (" + parsed.dur.toFixed(1) + "s). Chant Round " + (calRounds.length + 1) + "...";
-  }
+if (ctx && ctx.state === "suspended") { try { ctx.resume(); } catch (e) {} }
+if (!isCal) return;
+var noiseFloor = 4;
+if (calNoiseSamples.length > 0) {
+var sNoise = calNoiseSamples.slice().sort(function(a, b) { return a - b; });
+noiseFloor = sNoise.at(Math.floor(sNoise.length * 0.5));
+}
+var parsed = analyzeCalRound(calRoundFrames, noiseFloor);
+if (!parsed) {
+lg.textContent = "Could not hear full chant. Please chant the mantra once, then tap button.";
+calRoundFrames = new Array();
+calRoundStart = performance.now() / 1000;
+return;
+}
+calRounds.push(parsed);
+calRoundFrames = new Array();
+calRoundStart = performance.now() / 1000;
+if (calRounds.length >= 3) {
+finishCalibration();
+} else {
+updateCalPrompt();
+lg.textContent = "Round " + calRounds.length + " saved (" + parsed.dur.toFixed(1) + "s). Chant Round " + (calRounds.length + 1) + "...";
+}
 };
-
 calCancelBtn.onclick = function() {
-  cancelCalibration();
-  lg.textContent = "Calibration canceled.";
+cancelCalibration();
+lg.textContent = "Calibration canceled.";
 };
-
 var clrCalBtn = document.getElementById("clrCal");
 var clrConfirm = false;
 var clrTimer = null;
-
 clrCalBtn.onclick = function() {
-  if (!cal.calibrated && !vp) {
-    lg.textContent = "Already using default settings.";
-    return;
-  }
+if (!cal.calibrated && !vp) {
+lg.textContent = "Already using default settings.";
+return;
+}
 if (!clrConfirm) {
 clrConfirm = true;
 clrCalBtn.textContent = "Tap Again to Clear";
@@ -398,17 +435,17 @@ an.getByteTimeDomainData(timeData);
 an.getByteFrequencyData(freqData);
 var sum = 0;
 for (var i = 0; i < timeData.length; i++) {
-var v = (timeData[i] - 128) / 128;
+var v = (timeData.at(i) - 128) / 128;
 sum += v * v;
 }
 var rms = Math.sqrt(sum / timeData.length) * 400;
 smoothLv = smoothLv * 0.6 + rms * 0.4;
 fl.style.width = Math.min(100, smoothLv) + "%";
 var now = performance.now() / 1000;
-var spec = [];
+var spec = new Array();
 for (var b = 0; b < 32; b++) {
 var bSum = 0;
-for (var k = 0; k < 4; k++) bSum += freqData[b * 4 + k] || 0;
+for (var k = 0; k < 4; k++) bSum += freqData.at(b * 4 + k) || 0;
 spec.push(bSum / 4);
 }
 if (isCal) {
@@ -433,7 +470,7 @@ ch = true;
 t0 = now;
 actF = 0;
 totF = 0;
-curSpecs = [];
+curSpecs = new Array();
 }
 tLast = now;
 actF++;
@@ -487,4 +524,4 @@ lg.textContent = "Stopped.";
 await startAudio();
 }
 };
-lg.textContent = "v26 iOS Ready. Tap Start Voice Counting or Calibrate.";
+lg.textContent = "v29 iOS Ready. Tap Start Voice Counting or Calibrate.";
